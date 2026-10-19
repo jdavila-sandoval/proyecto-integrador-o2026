@@ -1,0 +1,42 @@
+export type UserRole = "Alumno" | "Profesor";
+
+export interface NotificationState {
+  message: string;
+  type: "success" | "error";
+}
+
+export interface LoginFormData {
+  email: string;
+  password: string;
+  remember: boolean;
+}
+
+export interface RegisterFormData {
+  name: string;
+  institutionId: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  acceptedTerms: boolean;
+}
+
+export interface VideoItem {
+  id: number;
+  title: string;
+  subject: string;
+  code: string;
+  duration: string;
+  uploadedAt: string;
+  views: number;
+  thumbnailClass: string;
+  progress?: number;
+  currentTime?: string;
+}
+
+export interface CourseMetric {
+  label: string;
+  value: string;
+  detail: string;
+  icon: string;
+  tone: "purple" | "orange" | "blue" | "green";
+}
