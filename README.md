@@ -1,66 +1,78 @@
 # EduStream
 
-EduStream es un prototipo de portal académico para explorar material audiovisual de cursos. Está construido con React, TypeScript, React Router y Vite.
+Parte del proyecto integrador para la materia de tecnologias en el cliente desarrollado con React, TypeScript, Vite y React Router.
 
-## Alcance actual
+## Entrega 3: fuente de datos
 
-La aplicación presenta flujos de interfaz para alumnos y docentes:
+Se eligió json-server como API simulada porque permite demostrar un CRUD REST real con persistencia en `db.json`, sin bloquear el avance del frontend por la configuración de un backend productivo. La capa de servicios está separada de los componentes y puede cambiarse posteriormente por una API Express, Supabase u otra fuente sin modificar las vistas.
 
-- **Inicio:** página informativa con características y un catálogo de cursos de demostración.
-- **Registro:** formulario para elegir el rol de alumno o profesor y validar campos obligatorios, coincidencia de contraseñas y aceptación de términos.
-- **Inicio de sesión:** formulario con validación básica de correo y contraseña.
-- **Dashboard:** resumen con métricas de ejemplo, videos para continuar viendo y accesos rápidos a materias.
-- **Gestión de videos:** lista de materiales de ejemplo con búsqueda por título, filtro por materia, vista previa y diálogos de edición y eliminación.
-- **Publicación de material:** formulario visual para describir un video y seleccionar materia, unidad y visibilidad.
+## Ejecución local
 
-### Limitaciones de la demostración
+Instala dependencias:
 
-Este alcance es de frontend y demostración. No hay servidor ni base de datos conectados: los videos y las métricas son datos estáticos de ejemplo; no se suben archivos reales; y los cambios, borradores, registros y sesiones no se guardan ni se validan contra un servicio. Las acciones de edición y eliminación solo muestran mensajes en pantalla. El formulario de inicio de sesión acepta cualquier correo y contraseña no vacíos, y las rutas del portal están abiertas en esta versión.
-
-## Requisitos
-
-- Node.js 18 o posterior
-- npm
-
-## Instalación y ejecución
-
-Desde una terminal, entra a la carpeta del proyecto e instala sus dependencias:
-
-```powershell
+```bash
 npm install
 ```
 
-Inicia el servidor de desarrollo:
+En una terminal inicia la API:
 
-```powershell
+```bash
+npm run server
+```
+
+En otra terminal inicia la aplicación:
+
+```bash
 npm run dev
 ```
 
-Abre en el navegador la URL que muestre Vite (normalmente `http://localhost:5173/`). Para detener el servidor, presiona `Ctrl+C` en la terminal.
+La API estará disponible en `http://localhost:3001` y el frontend en `http://localhost:5173`.
 
-## Rutas disponibles
+La URL de la API puede cambiarse con un archivo `.env`:
 
-| Ruta | Pantalla |
-| --- | --- |
-| `/` | Inicio y catálogo de demostración |
-| `/login` | Inicio de sesión simulado |
-| `/register` | Registro simulado |
-| `/dashboard` | Dashboard |
-| `/upload-video` | Formulario de publicación |
-| `/manage-videos` | Catálogo y gestión de videos |
-
-Las rutas no reconocidas redirigen al inicio.
-
-## Otros comandos
-
-```powershell
-npm run build
+```env
+VITE_API_URL=http://localhost:3001
 ```
 
-Ejecuta la comprobación de TypeScript y genera la versión de producción en `dist/`.
+## Contrato de API
 
-```powershell
-npm run preview
+Entidad principal: `VideoItem`.
+
+```ts
+{
+  id: number | string;
+  title: string;
+  subject: string;
+  code: string;
+  unit: string;
+  description: string;
+  visibility: "campus" | "group";
+  duration: string;
+  uploadedAt: string;
+  views: number;
+  thumbnailClass: string;
+}
 ```
 
-Sirve localmente la compilación de producción después de ejecutar `npm run build`.
+| Método | Endpoint | Uso |
+|---|---|---|
+| GET | `/videos` | Lista todos los videos |
+| GET | `/videos/:id` | Obtiene el detalle de un video |
+| POST | `/videos` | Crea un video |
+| PATCH | `/videos/:id` | Actualiza un video |
+| DELETE | `/videos/:id` | Elimina un video |
+
+Las respuestas exitosas usan los códigos HTTP estándar de json-server. Cuando la API falla, `src/services/apiClient.ts` centraliza el error en `ApiError`; la interfaz muestra un mensaje amigable y, cuando aplica, un botón para reintentar.
+
+## Formularios y estados
+
+El alta y la edición usan el componente reutilizable `VideoForm` con validación manual en `src/utils/videoValidation.ts`. Se validan título, materia, código, unidad y descripción. Mientras se procesa una operación se deshabilita el botón y se muestra `Procesando...`.
+
+Las vistas que consumen la API manejan:
+
+- Carga: mensaje `Cargando...`.
+- Error: mensaje de API y opción `Reintentar`.
+- Vacío: mensaje cuando no existen registros o los filtros no encuentran resultados.
+- Éxito: toast después de crear, editar o eliminar.
+
+La autenticación aún es simulada en esta entrega mediante `AuthGuard`, todavía no se manejan tokens de sesión, queda pendiente para las siguientes entregas.
