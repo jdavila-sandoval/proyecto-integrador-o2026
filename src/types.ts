@@ -21,7 +21,7 @@ export interface RegisterFormData {
 }
 
 export interface VideoItem {
-  id: number;
+  id: number | string;
   title: string;
   subject: string;
   code: string;
@@ -29,9 +29,23 @@ export interface VideoItem {
   uploadedAt: string;
   views: number;
   thumbnailClass: string;
+  unit?: string;
+  description?: string;
+  visibility?: "campus" | "group";
   progress?: number;
   currentTime?: string;
 }
+
+export interface VideoFormData {
+  title: string;
+  subject: string;
+  code: string;
+  unit: string;
+  description: string;
+  visibility: "campus" | "group";
+}
+
+export type VideoFieldErrors = Partial<Record<keyof VideoFormData, string>>;
 
 export interface CourseMetric {
   label: string;

@@ -6,6 +6,7 @@ import { AuthGuard } from "./components/AuthGuard";
 import { DashboardPage } from "./pages/DashboardPage";
 import { UploadVideoPage } from "./pages/UploadVideoPage";
 import { VideoListPage } from "./pages/VideoListPage";
+import { VideoDetailPage } from "./pages/VideoDetailPage";
 
 export default function App() {
   return (
@@ -34,6 +35,14 @@ export default function App() {
         element={
           <AuthGuard>
             <VideoListPage />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/videos/:id"
+        element={
+          <AuthGuard>
+            <VideoDetailPage />
           </AuthGuard>
         }
       />
