@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { PortalLayout, usePortalRole } from "../components/PortalLayout";
 import { StatCard } from "../components/ui/StatCard";
 import { useVideos } from "../hooks/useVideos";
+import { useAuth } from "../context/AuthContext";
 import type { CourseMetric } from "../types";
 
 const metrics: CourseMetric[] = [
@@ -13,13 +14,14 @@ const metrics: CourseMetric[] = [
 
 export function DashboardPage() {
   const [role, setRole] = usePortalRole();
+  const { user } = useAuth();
   const { videos, loading, error } = useVideos();
   return (
     <PortalLayout role={role} onRoleChange={setRole}>
       <div className="portal-container container">
         <div className="portal-welcome">
           <div><div className="eyebrow">DOMINGO, 18 DE OCTUBRE DE 2026</div><h1>Buen día, José <span>✦</span></h1><p>Continúa donde lo dejaste y descubre algo nuevo hoy.</p></div>
-          {role === "Docente" && <div className="portal-welcome-actions"><Link className="button button-secondary" to="/manage-videos">Gestionar videos</Link><Link className="button button-primary" to="/upload-video">＋ Subir nuevo video</Link></div>}
+          {user?.role === "docente" && <div className="portal-welcome-actions"><Link className="button button-secondary" to="/manage-videos">Gestionar videos</Link><Link className="button button-primary" to="/upload-video">＋ Subir nuevo video</Link></div>}
         </div>
         <div className="stats-grid">{metrics.map((metric) => <StatCard key={metric.label} metric={metric} />)}</div>
         <section className="portal-section">

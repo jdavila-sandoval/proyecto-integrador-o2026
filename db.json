@@ -1,4 +1,20 @@
 {
+  "users": [
+    {
+      "id": "u-docente",
+      "name": "Docente Demo",
+      "email": "docente@edustream.mx",
+      "passwordHash": "$2a$10$/Pm7RXdEVs1MZcp14xm6qOM9ytT.cD58tlypMQN.qJ3IrxfJeugeW",
+      "role": "docente"
+    },
+    {
+      "id": "u-alumno",
+      "name": "Alumno Demo",
+      "email": "alumno@edustream.mx",
+      "passwordHash": "$2a$10$/Pm7RXdEVs1MZcp14xm6qOM9ytT.cD58tlypMQN.qJ3IrxfJeugeW",
+      "role": "alumno"
+    }
+  ],
   "videos": [
     {
       "id": 4,

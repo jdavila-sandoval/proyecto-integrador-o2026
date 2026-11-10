@@ -5,6 +5,7 @@ interface VideoRowProps {
   onPreview: (video: VideoItem) => void;
   onEdit: (video: VideoItem) => void;
   onDelete: (video: VideoItem) => void;
+  canManage?: boolean;
 }
 
 export function VideoRow({
@@ -12,6 +13,7 @@ export function VideoRow({
   onPreview,
   onEdit,
   onDelete,
+  canManage = true,
 }: VideoRowProps) {
   return (
     <div className="video-row">
@@ -35,19 +37,7 @@ export function VideoRow({
         >
           Ver
         </button>
-        <button
-          onClick={() => onEdit(video)}
-          aria-label={`Editar ${video.title}`}
-        >
-          Editar
-        </button>
-        <button
-          className="delete-action"
-          onClick={() => onDelete(video)}
-          aria-label={`Eliminar ${video.title}`}
-        >
-          ⌫
-        </button>
+        {canManage && <><button onClick={() => onEdit(video)} aria-label={`Editar ${video.title}`}>Editar</button><button className="delete-action" onClick={() => onDelete(video)} aria-label={`Eliminar ${video.title}`}>⌫</button></>}
       </div>
     </div>
   );
