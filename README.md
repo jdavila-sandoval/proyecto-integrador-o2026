@@ -1,78 +1,120 @@
 # EduStream
 
-Parte del proyecto integrador para la materia de tecnologias en el cliente desarrollado con React, TypeScript, Vite y React Router.
+Plataforma académica para organizar y consultar recursos educativos por materia.
 
-## Entrega 3: fuente de datos
+## Integrantes
 
-Se eligió json-server como API simulada porque permite demostrar un CRUD REST real con persistencia en `db.json`, sin bloquear el avance del frontend por la configuración de un backend productivo. La capa de servicios está separada de los componentes y puede cambiarse posteriormente por una API Express, Supabase u otra fuente sin modificar las vistas.
+- Fabián Patricio Gaxiola Valades.
+- José Ignacio Dávila Sandoval.
 
-## Ejecución local
+## Objetivo de la entrega intermedia
 
-Instala dependencias:
+Demostrar el registro y consulta de un recurso educativo mediante el flujo:
+
+```text
+Cliente → API Gateway → backend en Docker sobre EC2 → DynamoDB
+```
+
+Registrar un recurso significa guardar sus metadatos. No implica que la carga o reproducción de archivos reales esté implementada.
+
+## Estado de esta documentación
+
+Actualización: 9 de noviembre de 2026.
+
+Se ha definido el modelo de datos y se han proporcionado ejemplos, código inicial e instrucciones de despliegue. El equipo debe confirmar qué pasos ejecutó exitosamente. Esta documentación no certifica un despliegue ni sustituye sus evidencias.
+
+| Componente | Estado conocido |
+|---|---|
+| Frontend React, TypeScript y Vite | Existente según la revisión previa del repositorio |
+| API simulada json-server | Documentada en el frontend existente |
+| Modelo DynamoDB | Definido |
+| Tres recursos de prueba | Ejemplos proporcionados; inserción completa por verificar |
+| Backend Python, FastAPI y boto3 | Código inicial proporcionado; ejecución por confirmar |
+| Docker y EC2 | Instrucciones proporcionadas; despliegue por confirmar |
+| API Gateway | Pendiente de configurar y verificar |
+| Integración del frontend con AWS | Pendiente de verificar |
+| Autenticación, autorización y archivos reales | Fuera del primer incremento |
+
+## Stack del incremento actual
+
+- Frontend: React, TypeScript, Vite y React Router.
+- Backend propuesto: Python, FastAPI, Uvicorn y boto3.
+- Empaquetado y ejecución: Docker en EC2.
+- Persistencia: DynamoDB.
+- Exposición posterior: API Gateway con integración HTTP proxy.
+- S3: previsto para archivos o estáticos, no verificado en este incremento.
+
+Para esta entrega se utiliza EC2 con Docker, no Lambda. Si documentos anteriores mantienen una arquitectura serverless, deben actualizarse o ratificarse con los docentes para evitar contradicciones.
+
+## Organización objetivo
+
+```text
+README.md
+docs/
+  modelo-datos.md
+  api.md
+  despliegue.md
+  pendientes.md
+  solucion.png
+  evidencias/
+src/
+  services/
+  backend/
+    app/
+      __init__.py
+      main.py
+    requirements.txt
+    Dockerfile
+    .dockerignore
+  scripts/
+```
+
+La estructura es objetivo; verificar los archivos realmente presentes. Revisar TypeScript y Vite antes de incorporar carpetas ajenas al frontend en src/.
+
+## Frontend local con API simulada
 
 ```bash
 npm install
 ```
 
-En una terminal inicia la API:
-
-```bash
-npm run server
-```
-
-En otra terminal inicia la aplicación:
-
-```bash
-npm run dev
-```
-
-La API estará disponible en `http://localhost:3001` y el frontend en `http://localhost:5173`.
-
-La URL de la API puede cambiarse con un archivo `.env`:
+Crear .env local:
 
 ```env
 VITE_API_URL=http://localhost:3001
 ```
 
-## Contrato de API
+En terminales separadas:
 
-Entidad principal: `VideoItem`.
-
-```ts
-{
-  id: number | string;
-  title: string;
-  subject: string;
-  code: string;
-  unit: string;
-  description: string;
-  visibility: "campus" | "group";
-  duration: string;
-  uploadedAt: string;
-  views: number;
-  thumbnailClass: string;
-}
+```bash
+npm run server
 ```
 
-| Método | Endpoint | Uso |
-|---|---|---|
-| GET | `/videos` | Lista todos los videos |
-| GET | `/videos/:id` | Obtiene el detalle de un video |
-| POST | `/videos` | Crea un video |
-| PATCH | `/videos/:id` | Actualiza un video |
-| DELETE | `/videos/:id` | Elimina un video |
+```bash
+npm run dev
+```
 
-Las respuestas exitosas usan los códigos HTTP estándar de json-server. Cuando la API falla, `src/services/apiClient.ts` centraliza el error en `ApiError`; la interfaz muestra un mensaje amigable y, cuando aplica, un botón para reintentar.
+Direcciones documentadas: frontend http://localhost:5173 y API simulada http://localhost:3001. Utilizar la dirección real que muestre cada proceso.
 
-## Formularios y estados
+No cambiar todavía la URL a AWS sin comprobar el contrato y la conectividad. No guardar secretos en variables VITE_.
 
-El alta y la edición usan el componente reutilizable `VideoForm` con validación manual en `src/utils/videoValidation.ts`. Se validan título, materia, código, unidad y descripción. Mientras se procesa una operación se deshabilita el botón y se muestra `Procesando...`.
+## Documentación
 
-Las vistas que consumen la API manejan:
+- [Modelo de datos](docs/modelo-datos.md)
+- [API](docs/api.md)
+- [Despliegue y pruebas](docs/despliegue.md)
+- [Pendientes](docs/pendientes.md)
 
-- Carga: mensaje `Cargando...`.
-- Error: mensaje de API y opción `Reintentar`.
-- Vacío: mensaje cuando no existen registros o los filtros no encuentran resultados.
-- Éxito: toast después de crear, editar o eliminar.
+El modelo de datos se entrega por separado en este paquete y debe conservar los mismos nombres que AWS y el código.
 
-La autenticación aún es simulada en esta entrega mediante `AuthGuard`, todavía no se manejan tokens de sesión, queda pendiente para las siguientes entregas.
+## Seguridad y limitaciones
+
+- Autenticación del frontend simulada; no sustituye validaciones del servidor.
+- visibility no aplica permisos por sí mismo.
+- No almacenar credenciales, tokens, llaves SSH ni contraseñas en Git.
+- En EC2 utilizar un perfil IAM autorizado; no incrustar credenciales en la imagen.
+- La prueba directa HTTP a EC2 es temporal y restringida a la IP del equipo.
+- duration y views siguen siendo valores de compatibilidad, no métricas reales.
+
+## Criterio de finalización
+
+Un POST mediante API Gateway debe crear un elemento en DynamoDB, y un GET debe permitir recuperarlo. Deben mostrarse el contenedor en EC2, sus logs y el registro persistido. Guardar las evidencias reales en docs/evidencias/.
