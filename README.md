@@ -1,8 +1,8 @@
 # EduStream
 
-Parte del proyecto integrador para la materia de tecnologias en el cliente desarrollado con React, TypeScript, Vite y React Router.
+Entrega parcial del proyecto integrador para la materia de tecnologias en el cliente desarrollado con React, TypeScript, Vite y React Router.
 
-## Entrega 3: fuente de datos
+## Entrega 2: fuente de datos
 
 Se eligió json-server como API simulada porque permite demostrar un CRUD REST real con persistencia en `db.json`, sin bloquear el avance del frontend por la configuración de un backend productivo. La capa de servicios está separada de los componentes y puede cambiarse posteriormente por una API Express, Supabase u otra fuente sin modificar las vistas.
 
@@ -75,4 +75,39 @@ Las vistas que consumen la API manejan:
 - Vacío: mensaje cuando no existen registros o los filtros no encuentran resultados.
 - Éxito: toast después de crear, editar o eliminar.
 
-La autenticación aún es simulada en esta entrega mediante `AuthGuard`, todavía no se manejan tokens de sesión, queda pendiente para las siguientes entregas.
+## Entrega 3: autenticación y permisos
+
+La autenticación usa una API propia con Express y JWT. Las contraseñas se almacenan con hash bcrypt en `db.json`; nunca se guarda la contraseña original. El servidor expone:
+
+| Método | Endpoint | Uso |
+|---|---|---|
+| POST | `/auth/register` | Registra un usuario y devuelve JWT |
+| POST | `/auth/login` | Valida credenciales y devuelve JWT |
+| GET | `/auth/me` | Valida el token y devuelve el usuario actual |
+
+El frontend guarda el token y el usuario en `localStorage`, agrega automáticamente el token como `Authorization: Bearer ...` desde `apiClient.ts` y elimina la sesión cuando recibe un 401. El JWT expira después de 60 minutos. Al expirar, se redirige al login con un mensaje claro.
+
+### Roles y permisos
+
+| Rol | Puede ver dashboard y videos | Puede crear | Puede editar | Puede eliminar |
+|---|---:|---:|---:|---:|
+| `alumno` | Sí | No | No | No |
+| `docente` | Sí | Sí | Sí | Sí |
+
+Los botones se controlan con el componente reutilizable `Can`, pero la API también valida el rol y responde 403 si un alumno intenta modificar videos directamente.
+
+### Guardias
+
+- `ProtectedRoute`: exige una sesión activa y conserva la ruta solicitada.
+- `GuestRoute`: evita que un usuario autenticado vuelva a login o registro.
+- `RoleRoute`: restringe `/upload-video` al rol `docente` y muestra `/403` cuando no hay permiso.
+- `/404`: vista para rutas inexistentes.
+
+### Usuarios de prueba
+
+```text
+Docente: docente@edustream.mx / Demo123!
+Alumno:  alumno@edustream.mx  / Demo123!
+```
+
+Inicia la API con `npm run server` y el frontend con `npm run dev`. Para despliegue real se debe reemplazar el secreto JWT de desarrollo mediante `JWT_SECRET`, migrar los usuarios a una base de datos y usar cookies HttpOnly o un mecanismo equivalente más seguro.
