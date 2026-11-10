@@ -1,4 +1,5 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const TOKEN_KEY = "edustream_token";
 
 export class ApiError extends Error {
   status: number;
@@ -17,8 +18,13 @@ export async function apiRequest<T>(
   let response: Response;
 
   try {
+    const token = localStorage.getItem(TOKEN_KEY);
     response = await fetch(`${API_URL}${path}`, {
-      headers: { "Content-Type": "application/json", ...options.headers },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
       ...options,
     });
   } catch {
@@ -30,6 +36,10 @@ export async function apiRequest<T>(
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      window.dispatchEvent(new Event("edustream:unauthorized"));
+    }
     const message =
       typeof body?.message === "string"
         ? body.message

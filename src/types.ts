@@ -1,5 +1,19 @@
 export type UserRole = "Alumno" | "Profesor";
 
+export type AppRole = "alumno" | "docente";
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: AppRole;
+}
+
+export interface AuthResponse {
+  user: AuthUser;
+  token: string;
+}
+
 export interface NotificationState {
   message: string;
   type: "success" | "error";
