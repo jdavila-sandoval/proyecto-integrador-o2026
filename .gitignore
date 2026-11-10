@@ -1,3 +1,6 @@
 node_modules
 dist
 .DS_Store
+edustream.pem
+__pycache__/
+*.py[cod]
