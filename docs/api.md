@@ -2,82 +2,84 @@
 
 ## Estado y alcance
 
-Especificación del código inicial propuesto el 9 de noviembre de 2026. No se han proporcionado resultados de ejecución que acrediten su despliegue.
+Actualizado el 18 de noviembre de 2026. La REST API Regional está desplegada en `dev` (`us-east-1`). El equipo verificó en Postman el listado, la creación y la consulta por ID, así como el bloqueo de una solicitud desde una red no autorizada. El backend usa Python, FastAPI y boto3. La conexión del frontend React a la API real sigue pendiente; su entorno local utiliza `json-server`.
 
-El backend utiliza Python, FastAPI y boto3. El frontend existente utiliza json-server; ambas implementaciones no deben confundirse.
-
-## Flujo objetivo
+## Arquitectura desplegada
 
 ```text
-Cliente → API Gateway → integración HTTP proxy → EC2/Docker/FastAPI → DynamoDB
+Postman → HTTPS → API Gateway Regional (dev)
+        → HTTP proxy mediante VPC Link V2
+        → ALB interno (HTTP:80)
+        → EC2:8000 → FastAPI en Docker → DynamoDB (EduStream_Videos)
 ```
 
-La respuesta regresa por el mismo camino. API Gateway sigue pendiente de configuración y prueba.
+La respuesta regresa por el mismo recorrido. El proxy conserva el contrato y las validaciones del backend. `/dev` forma parte de la URL pública de invocación; las rutas de FastAPI no incluyen ese prefijo.
 
-## Direcciones
+## URL de invocación
 
-| Entorno | URL |
-|---|---|
-| Local propuesto | http://localhost:8000 |
-| EC2 directo, temporal | http://<IP_PUBLICA_EC2>:8000 |
-| API Gateway | Por registrar tras el despliegue |
-| Stage previsto | dev |
-| Región real | Por confirmar |
+```text
+https://i08xd81pvb.execute-api.us-east-1.amazonaws.com/dev
+```
 
-Los valores entre < > son marcadores, no endpoints existentes.
+URL construida con el ID de API que aparece en los logs, la región y el stage. Confirmar que coincide con `Stages → dev → Invoke URL` antes de entregar. En Postman se puede guardar como `baseUrl`, sin barra final.
 
-## Operaciones del código inicial
+## Recursos, métodos e integración
 
-| Método | Ruta | Entrada | Respuesta |
+| Método y recurso público | Entrada | Integración y destino lógico | Respuesta |
 |---|---|---|---|
-| GET | /health | Sin cuerpo | 200, estado del proceso |
-| GET | /videos | Sin cuerpo | 200, arreglo de recursos |
-| GET | /videos/{video_id} | ID en ruta | 200, recurso; 404 si no existe |
-| POST | /videos | JSON de metadatos | 201, recurso creado; 422 si falla validación |
+| `GET /videos` | Sin cuerpo | HTTP proxy, VPC Link V2 → `GET /videos` | `200` y arreglo de recursos |
+| `POST /videos` | JSON de metadatos | HTTP proxy, VPC Link V2 → `POST /videos` | `201` y recurso creado; `422` si los datos son inválidos |
+| `GET /videos/{id}` | `id` en la ruta | HTTP proxy, VPC Link V2 → `GET /videos/{id}` | `200` y recurso; `404` si no existe |
 
-GET /health no comprueba acceso a DynamoDB. Los errores de AWS capturados por el código inicial se traducen a 503 con un mensaje genérico. No todos los posibles errores de programación quedan cubiertos por ese manejo.
+El parámetro `id` se toma de `method.request.path.id`. FastAPI lo recibe como `video_id` y DynamoDB lo usa como clave primaria. `GET /health` es un endpoint del backend y del health check del ALB: no forma parte de los métodos públicos documentados y no verifica DynamoDB.
 
-PATCH y DELETE existen en la API simulada del frontend, pero no en el backend inicial. Deben mantenerse deshabilitados o indicarse como pendientes al conectar el cliente real.
+## Control de acceso
 
-## POST /videos
+La política de recursos de API Gateway limita las invocaciones a las IP públicas autorizadas. Usa `aws:SourceIp` con `NotIpAddress` en una regla `Deny` para bloquear orígenes fuera de la lista. No publicar las IP autorizadas en este documento. Si cambia la IP de la red de prueba, actualizar la política y volver a desplegar `dev`.
+
+El ALB interno protege el acceso directo al backend; la política controla quién puede invocar API Gateway. Esta restricción por IP no autentica usuarios. El campo `visibility` es un metadato, no un permiso.
+
+## Pruebas en Postman
+
+| Solicitud | Resultado verificado |
+|---|---|
+| `GET {{baseUrl}}/videos` desde la red autorizada | `200 OK`, catálogo |
+| `POST {{baseUrl}}/videos` desde la red autorizada | `201 Created`, recurso con `id` generado |
+| `GET {{baseUrl}}/videos/{{id}}` con el ID devuelto por el POST | `200 OK`, detalle del recurso |
+| `GET {{baseUrl}}/videos` desde una red no autorizada | `403 Forbidden`, acceso bloqueado |
+
+### Cuerpo de prueba del POST
+
+En Postman: `Body → raw → JSON`, con `Content-Type: application/json`.
 
 ```json
 {
-  "title": "Prueba de integración del backend",
+  "title": "Integración de API Gateway con EC2",
   "subject_id": "SUB-NUBE",
   "subject": "Desarrollo en la Nube",
   "code": "NUBE-01",
-  "unit": "Unidad 3",
-  "description": "Recurso creado desde el backend conectado a DynamoDB.",
+  "unit": "Unidad 4",
+  "description": "Recurso de prueba creado desde Postman para verificar el flujo de API Gateway a EC2 y DynamoDB.",
   "visibility": "campus"
 }
 ```
 
-Campos requeridos: title, subject_id, subject, code, unit y description. visibility admite campus o group y utiliza campus si se omite.
+Son obligatorios `title`, `subject_id`, `subject`, `code`, `unit` y `description`. No admiten cadenas vacías tras recortar espacios. Los límites son 200 caracteres para `title` y `subject`, 100 para `subject_id`, `code` y `unit`, y 5000 para `description`. `visibility` admite `campus` o `group` y usa `campus` si se omite. La validación cruzada entre identificador, nombre y código de materia sigue pendiente.
 
-| Campo | Longitud máxima propuesta |
-|---|---|
-| title | 200 |
-| subject_id, code, unit | 100 |
-| subject | 200 |
-| description | 5000 |
+El backend genera el UUID, las fechas UTC, el título normalizado y `thumbnail_class`. El POST usa JSON normal, sin los envoltorios tipados de DynamoDB.
 
-Los campos de texto requeridos no admiten cadenas vacías después de recortar espacios. Falta comprobar correspondencia entre materia, nombre y código.
+### Respuesta de recurso
 
-El backend genera UUID, fechas UTC, título normalizado y thumbnail_class. El cliente no determina el ID persistido.
-
-## Respuesta de recurso
-
-Ejemplo ilustrativo, no respuesta capturada:
+Ejemplo ilustrativo: sustituir los marcadores por los valores de la respuesta real si se incorpora al expediente de evidencia.
 
 ```json
 {
   "id": "<UUID_GENERADO>",
-  "title": "Prueba de integración del backend",
+  "title": "Integración de API Gateway con EC2",
   "subject": "Desarrollo en la Nube",
   "code": "NUBE-01",
-  "unit": "Unidad 3",
-  "description": "Recurso creado desde el backend conectado a DynamoDB.",
+  "unit": "Unidad 4",
+  "description": "Recurso de prueba creado desde Postman para verificar el flujo de API Gateway a EC2 y DynamoDB.",
   "visibility": "campus",
   "duration": "00:00",
   "uploadedAt": "<FECHA_UTC_ISO8601>",
@@ -86,58 +88,22 @@ Ejemplo ilustrativo, no respuesta capturada:
 }
 ```
 
-uploadedAt se devuelve como ISO 8601 en el código inicial; comprobar su presentación en la interfaz. duration y views son valores temporales.
-
-## Listado y paginación
-
-GET /videos devuelve un arreglo, no un objeto con data o cursor. El código inicial recorre internamente las páginas del Scan mediante LastEvaluatedKey. No implementa paginación visible para el cliente ni garantiza orden cronológico. Uso limitado al dataset académico pequeño.
-
-La consulta por materia mediante SubjectIndex está diseñada en el modelo, pero no implementada en este código inicial. No anunciar todavía filtros por query string.
+`uploadedAt` se devuelve en ISO 8601. `duration` y `views` son valores de compatibilidad, no mediciones reales. `GET /videos` devuelve un arreglo de objetos con esta estructura. El backend recorre internamente las páginas del `Scan` con `LastEvaluatedKey`; no ofrece cursor al cliente, orden cronológico garantizado ni filtros por materia. `SubjectIndex` está previsto para la consulta por materia, pero no se expone en estas rutas.
 
 ## Errores
 
-| Código | Significado en el incremento inicial |
-|---|---|
-| 404 | Recurso inexistente |
-| 422 | Validación de entrada por FastAPI |
-| 503 | Error de AWS capturado al operar con DynamoDB |
-
-Ejemplo de 404 previsto:
-
-```json
-{"detail": "Recurso no encontrado."}
-```
-
-La respuesta 422 utiliza la estructura de validación de FastAPI, no un único mensaje de texto. No documentar 400 como implementado mientras no exista un manejador que lo produzca.
-
-## Integración pendiente con el frontend
-
-- Añadir subject_id al POST o resolverlo de forma controlada en el backend.
-- Mantener id en la respuesta, aunque DynamoDB utilice video_id.
-- Revisar uploadedAt en la vista.
-- Configurar CORS para los orígenes autorizados.
-- Ajustar el tratamiento de errores 422 y 503.
-- Deshabilitar edición y eliminación hasta implementarlas.
-
-## API Gateway pendiente
-
-| Método/recurso | Integración propuesta | Destino lógico |
+| Código | Origen | Significado |
 |---|---|---|
-| GET /videos | HTTP proxy | Backend: GET /videos |
-| POST /videos | HTTP proxy | Backend: POST /videos |
-| GET /videos/{id} | HTTP proxy | Backend: GET /videos/{id} |
+| `403` | API Gateway | Origen no autorizado por la política; bloqueo verificado |
+| `404` | FastAPI | No existe un recurso con el ID solicitado |
+| `422` | FastAPI | Solicitud inválida según el modelo de entrada |
+| `503` | FastAPI | El backend capturó un error al operar con DynamoDB |
 
-Mapear correctamente el parámetro de ruta al endpoint de integración. Registrar stage, URL completa y configuración real al desplegar. La integración proxy se propone para conservar en el backend el contrato y las validaciones.
+Los códigos `404`, `422` y `503` describen el contrato del backend; no se presentan aquí como respuestas capturadas en Postman. `422` devuelve el detalle estructurado de validación de FastAPI, no un mensaje de texto único.
 
-## Pruebas a registrar
+## Evidencias y pendientes
 
-- GET /health: 200.
-- GET /videos: recursos existentes.
-- GET de ID existente: 200.
-- GET de ID inexistente: 404.
-- POST válido: 201 y registro persistido.
-- POST con título vacío: 422.
-- Reiniciar contenedor y recuperar el registro.
-- Repetir el flujo mediante API Gateway cuando esté configurado.
-
-Guardar solicitudes y respuestas reales, fecha, entorno y evidencias. Esta especificación no sustituye esas capturas.
+- Guardar en `docs/evidencias/` las solicitudes y respuestas reales de Postman y la prueba de bloqueo. No incluir credenciales ni IP de clientes autorizados.
+- Relacionar el `id` real del POST y del GET de detalle con el `video_id` del elemento en DynamoDB. Adjuntar evidencia del contenedor, los logs y el despliegue del stage.
+- Para conectar React: configurar `VITE_API_URL` y CORS para el origen previsto, resolver `subject_id` en el alta y adaptar fechas y errores a la interfaz.
+- Mantener edición (`PATCH`) y eliminación (`DELETE`) como pendientes en la API real; las operaciones de `json-server` no cuentan como desplegadas en AWS.
