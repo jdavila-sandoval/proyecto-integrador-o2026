@@ -48,6 +48,7 @@ export interface VideoItem {
   visibility?: "campus" | "group";
   progress?: number;
   currentTime?: string;
+  attachments?: AttachmentItem[];
 }
 
 export interface VideoFormData {
@@ -68,3 +69,14 @@ export interface CourseMetric {
   icon: string;
   tone: "purple" | "orange" | "blue" | "green";
 }
+
+export interface AttachmentItem {
+  id: string;
+  name: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  url: string;
+}
+
+export type RealtimeStatus = "conectado" | "reconectando" | "desconectado";
