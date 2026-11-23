@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { useNavigate } from "react-router-dom";
 import { authService } from "../services/authService";
 import type { AppRole, AuthUser } from "../types";
+import { realtimeService } from "../services/realtimeService";
 
 const TOKEN_KEY = "edustream_token";
 const USER_KEY = "edustream_user";
@@ -32,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
     setUser(nextUser);
     setError(null);
+    realtimeService.connect(token);
   };
 
   useEffect(() => {
@@ -40,11 +42,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(USER_KEY);
       setUser(null);
       setLoading(false);
+      realtimeService.disconnect();
       setError("Tu sesión expiró. Inicia sesión nuevamente.");
       navigate("/login", { replace: true, state: { message: "Tu sesión expiró. Inicia sesión nuevamente." } });
     };
     window.addEventListener("edustream:unauthorized", handleUnauthorized);
     if (localStorage.getItem(TOKEN_KEY)) {
+      realtimeService.connect(localStorage.getItem(TOKEN_KEY)!);
       authService.me().then(({ user: currentUser }) => {
         localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
         setUser(currentUser);
@@ -68,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       finally { setLoading(false); }
     },
     logout: () => {
+      realtimeService.disconnect();
       localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); setUser(null); navigate("/");
     },
     clearError: () => setError(null),
