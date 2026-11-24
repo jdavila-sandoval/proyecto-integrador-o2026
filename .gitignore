@@ -4,3 +4,5 @@ dist
 edustream.pem
 __pycache__/
 *.py[cod]
+.env.local
+.env
