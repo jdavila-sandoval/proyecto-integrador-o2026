@@ -1,11 +1,11 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState, type DragEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PortalLayout, usePortalRole } from "../components/PortalLayout";
 import { VideoForm } from "../components/ui/VideoForm";
 import { Toast } from "../components/ui/Toast";
-import { videoService } from "../services/videoService";
 import { validateVideoForm } from "../utils/videoValidation";
 import type { VideoFieldErrors, VideoFormData } from "../types";
+import { fileService } from "../services/fileService";
 
 const initialForm: VideoFormData = {
   title: "",
@@ -22,7 +22,46 @@ export function UploadVideoPage() {
   const [errors, setErrors] = useState<VideoFieldErrors>({});
   const [toast, setToast] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  const chooseVideo = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      setToast("Solo puedes seleccionar archivos de video (.mp4 o .webm).");
+      setVideoFile(null);
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setToast("El video excede el tamaño máximo de 10 MB.");
+      setVideoFile(null);
+      return;
+    }
+    setToast(null);
+    setVideoFile(file);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const onDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    chooseVideo(event.dataTransfer.files[0]);
+  };
+
+  const cancelUpload = () => {
+    xhrRef.current?.abort();
+    xhrRef.current = null;
+    setSubmitting(false);
+    setUploadProgress(0);
+    setToast("Subida cancelada.");
+  };
 
   const update = (field: keyof VideoFormData, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -34,17 +73,38 @@ export function UploadVideoPage() {
     const nextErrors = validateVideoForm(form);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
+    if (!videoFile) {
+      setToast("Selecciona el archivo de video antes de publicar.");
+      return;
+    }
 
     setSubmitting(true);
-    try {
-      await videoService.create(form);
-      setToast("El video se creó correctamente.");
-      window.setTimeout(() => navigate("/manage-videos"), 800);
-    } catch (reason) {
-      setToast(reason instanceof Error ? reason.message : "No se pudo crear el video.");
-    } finally {
-      setSubmitting(false);
-    }
+    setUploadProgress(0);
+    xhrRef.current = fileService.uploadVideo(
+      {
+        title: form.title,
+        subject: form.subject,
+        code: form.code,
+        unit: form.unit,
+        description: form.description,
+        visibility: form.visibility,
+      },
+      videoFile,
+      {
+        onProgress: setUploadProgress,
+        onSuccess: () => {
+          setUploadProgress(100);
+          setSubmitting(false);
+          setToast("El video se subió y procesó correctamente.");
+          window.setTimeout(() => navigate("/manage-videos"), 800);
+        },
+        onError: (message) => {
+          setSubmitting(false);
+          setUploadProgress(0);
+          setToast(message);
+        },
+      },
+    );
   };
 
   return (
@@ -59,15 +119,28 @@ export function UploadVideoPage() {
         </div>
         <div className="upload-layout">
           <section className="upload-form-card">
-            <div className="upload-dropzone">
-              <div className="upload-icon">↑</div>
-              <strong>Arrastra tu video aquí o <u>examina tus archivos</u></strong>
-              <span>Formatos aceptados: .mp4, .webm · Máximo 2 GB</span>
-              <div className="file-progress">
-                <div><span>Archivo cargado: clase_semana_04.mp4</span><small>45.2 MB · 100%</small></div>
-                <span className="file-bar"><i /></span>
+            <label className="upload-dropzone upload-dropzone-input" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
+              <input
+                type="file"
+                accept="video/mp4,video/webm"
+                disabled={submitting}
+                onChange={(event) => chooseVideo(event.target.files?.[0])}
+              />
+              {previewUrl ? (
+                <video className="upload-video-preview" src={previewUrl} controls muted />
+              ) : (
+                <div className="upload-icon">↑</div>
+              )}
+              <strong>{videoFile ? videoFile.name : <>Arrastra tu video aquí o <u>examina tus archivos</u></>}</strong>
+              <span>{videoFile ? `${(videoFile.size / 1024 / 1024).toFixed(1)} MB` : "Formatos aceptados: .mp4, .webm · Máximo 10 MB"}</span>
+            </label>
+            {submitting && (
+              <div className="upload-progress upload-page-progress">
+                <div><span>Subiendo y procesando video...</span><strong>{uploadProgress}%</strong></div>
+                <div className="file-bar"><i style={{ width: `${uploadProgress}%` }} /></div>
+                <button type="button" onClick={cancelUpload}>Cancelar subida</button>
               </div>
-            </div>
+            )}
             <div className="form-section-title">Información del material</div>
             <VideoForm data={form} errors={errors} submitting={submitting} submitLabel="Publicar video →" onChange={update} onSubmit={submit} onCancel={() => navigate("/dashboard")} />
             <button className="draft-button" type="button" onClick={() => setToast("Borrador guardado correctamente.")}>Guardar borrador</button>

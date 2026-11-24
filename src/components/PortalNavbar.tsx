@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
+import { useRealtimeStatus } from "../hooks/useRealtime";
 
 export function PortalNavbar({
   role,
@@ -12,6 +13,7 @@ export function PortalNavbar({
 }) {
   const { user, logout } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
+  const realtimeStatus = useRealtimeStatus();
   return (
     <header className="portal-header">
       <div className="portal-nav container">
@@ -25,6 +27,10 @@ export function PortalNavbar({
         </div>
         <div className="role-toggle" aria-label="Rol actual">
           <span className="profile-role-label">{user?.role === "docente" ? "Vista Docente" : "Vista Alumno"}</span>
+        </div>
+        <div className={`realtime-status realtime-${realtimeStatus}`} title={`Tiempo real: ${realtimeStatus}`}>
+          <span />
+          {realtimeStatus}
         </div>
         <div className="profile-wrap">
           <button

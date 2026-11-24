@@ -3,6 +3,8 @@ import { PortalLayout, usePortalRole } from "../components/PortalLayout";
 import { StatCard } from "../components/ui/StatCard";
 import { useVideos } from "../hooks/useVideos";
 import { useAuth } from "../context/AuthContext";
+import { useEffect } from "react";
+import { realtimeService } from "../services/realtimeService";
 import type { CourseMetric } from "../types";
 
 const metrics: CourseMetric[] = [
@@ -15,7 +17,12 @@ const metrics: CourseMetric[] = [
 export function DashboardPage() {
   const [role, setRole] = usePortalRole();
   const { user } = useAuth();
-  const { videos, loading, error } = useVideos();
+  const { videos, loading, error, reload } = useVideos();
+  useEffect(() => {
+    const unsubscribeCatalog = realtimeService.subscribe("catalog:changed", () => void reload());
+    const unsubscribeSync = realtimeService.subscribe("sync:required", () => void reload());
+    return () => { unsubscribeCatalog(); unsubscribeSync(); };
+  }, [reload]);
   return (
     <PortalLayout role={role} onRoleChange={setRole}>
       <div className="portal-container container">
