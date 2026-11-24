@@ -127,7 +127,7 @@ La Entrega 4 usa el mismo servidor Express de la aplicación con **Multer** para
 
 El formulario acepta archivos mediante selección o arrastrar y soltar. Se valida el tipo MIME y el tamaño máximo antes de enviar. Las imágenes muestran una vista previa local antes de la subida. La subida usa `XMLHttpRequest`, informa el porcentaje y permite cancelarla. Docentes pueden subir y eliminar; alumnos pueden abrir y descargar.
 
-Esta integración es local y demostrativa. Para producción puede reemplazarse Multer por almacenamiento S3/Supabase/Firebase sin cambiar la interfaz: `fileService.ts` concentra las peticiones y `FileManager.tsx` consume el contrato de adjuntos.
+Esta integración es local y con fines demostrativos. Para producción se remplazará Multer por almacenamiento S3 sin cambiar la interfaz: `fileService.ts` concentra las peticiones y `FileManager.tsx` consume el contrato de adjuntos.
 
 ### Tiempo real
 
