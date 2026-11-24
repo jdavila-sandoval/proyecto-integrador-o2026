@@ -12,6 +12,8 @@ import { validateVideoForm } from "../utils/videoValidation";
 import type { VideoFieldErrors, VideoFormData, VideoItem } from "../types";
 import { Can } from "../components/Can";
 import { useAuth } from "../context/AuthContext";
+import { useEffect } from "react";
+import { realtimeService } from "../services/realtimeService";
 
 const emptyForm: VideoFormData = { title: "", subject: "", code: "", unit: "", description: "", visibility: "campus" };
 
@@ -32,6 +34,11 @@ export function VideoListPage() {
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+  useEffect(() => {
+    const unsubscribeCatalog = realtimeService.subscribe("catalog:changed", () => void reload());
+    const unsubscribeSync = realtimeService.subscribe("sync:required", () => void reload());
+    return () => { unsubscribeCatalog(); unsubscribeSync(); };
+  }, [reload]);
   const filtered = useMemo(() => videos.filter((video) => video.title.toLowerCase().includes(search.toLowerCase()) && (subject === "Todas las materias" || video.subject === subject)), [videos, search, subject]);
   const close = () => { setModal(null); setSelected(null); setEditErrors({}); };
   const openEdit = (video: VideoItem) => { setSelected(video); setEditForm(formFromVideo(video)); setModal("edit"); };

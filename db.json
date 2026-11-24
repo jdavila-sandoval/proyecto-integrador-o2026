@@ -17,43 +17,50 @@
   ],
   "videos": [
     {
-      "id": 4,
-      "title": "Patrones de arquitectura web",
+      "id": 1795452008401,
+      "title": "test123",
       "subject": "Tecnologías en el Cliente",
-      "code": "TEC-310",
-      "unit": "Unidad 4: Arquitectura",
-      "description": "Patrones comunes para organizar aplicaciones web.",
-      "visibility": "group",
-      "duration": "41:50",
-      "uploadedAt": "05 oct 2026",
-      "views": 151,
-      "thumbnailClass": "thumb-green"
-    },
-    {
-      "id": 5,
-      "title": "Introducción a Kubernetes",
-      "subject": "Desarrollo en la Nube",
-      "code": "NUB-204",
-      "unit": "Unidad 5: Kubernetes",
-      "description": "Conceptos básicos de orquestación de contenedores.",
-      "visibility": "campus",
-      "duration": "29:44",
-      "uploadedAt": "02 oct 2026",
-      "views": 129,
-      "thumbnailClass": "thumb-pink"
-    },
-    {
-      "title": "test2026",
-      "subject": "Tecnologías en el Cliente",
-      "code": "test",
-      "unit": "test",
-      "description": "test",
+      "code": "test123",
+      "unit": "test123",
+      "description": "test123",
       "visibility": "campus",
       "duration": "00:00",
-      "uploadedAt": "01 nov 2026",
+      "uploadedAt": "23/11/2026",
       "views": 0,
       "thumbnailClass": "thumb-blue",
-      "id": 6
+      "attachments": [
+        {
+          "id": "file-1795452008401",
+          "name": "demo-cliente4.mp4",
+          "filename": "1795452008386-demo-cliente4.mp4",
+          "mimeType": "video/mp4",
+          "size": 2847650,
+          "url": "/files/1795452008386-demo-cliente4.mp4"
+        }
+      ]
+    },
+    {
+      "id": 1795452091406,
+      "title": "hola2026",
+      "subject": "Desarrollo en la Nube",
+      "code": "hola2026",
+      "unit": "hola2026",
+      "description": "hola2026",
+      "visibility": "campus",
+      "duration": "00:00",
+      "uploadedAt": "23/11/2026",
+      "views": 0,
+      "thumbnailClass": "thumb-blue",
+      "attachments": [
+        {
+          "id": "file-1795452091406",
+          "name": "demo-c2.mp4",
+          "filename": "1795452091370-demo-c2.mp4",
+          "mimeType": "video/mp4",
+          "size": 9765882,
+          "url": "/files/1795452091370-demo-c2.mp4"
+        }
+      ]
     }
   ]
 }

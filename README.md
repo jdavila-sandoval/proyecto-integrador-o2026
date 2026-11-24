@@ -111,3 +111,50 @@ Alumno:  alumno@edustream.mx  / Demo123!
 ```
 
 Inicia la API con `npm run server` y el frontend con `npm run dev`. Para despliegue real se debe reemplazar el secreto JWT de desarrollo mediante `JWT_SECRET`, migrar los usuarios a una base de datos y usar cookies HttpOnly o un mecanismo equivalente más seguro.
+
+## Entrega 4: archivos y tiempo real
+
+### Archivos asociados a videos
+
+La Entrega 4 usa el mismo servidor Express de la aplicación con **Multer** para adjuntos locales. Los archivos se guardan en `mock-uploads/`, que está excluido de Git. Los archivos se muestran junto al detalle del video y pueden ser imágenes o videos de hasta 10 MB.
+
+| Método | Endpoint | Uso |
+|---|---|---|
+| GET | `/videos/:id/files` | Lista los adjuntos de un video |
+| POST | `/videos/:id/files` | Sube un adjunto como `multipart/form-data` |
+| DELETE | `/videos/:id/files/:fileId` | Elimina un adjunto |
+| GET | `/files/:filename` | Abre o descarga el archivo almacenado |
+
+El formulario acepta archivos mediante selección o arrastrar y soltar. Se valida el tipo MIME y el tamaño máximo antes de enviar. Las imágenes muestran una vista previa local antes de la subida. La subida usa `XMLHttpRequest`, informa el porcentaje y permite cancelarla. Docentes pueden subir y eliminar; alumnos pueden abrir y descargar.
+
+Esta integración es local y con fines demostrativos. Para producción se remplazará Multer por almacenamiento S3 sin cambiar la interfaz: `fileService.ts` concentra las peticiones y `FileManager.tsx` consume el contrato de adjuntos.
+
+### Tiempo real
+
+La aplicación usa **Socket.IO** sobre el mismo servidor Express. `realtimeService.ts` mantiene una única instancia compartida, recibe el JWT al conectarse y se desconecta al cerrar sesión.
+
+Estados visibles en el navbar:
+
+- `conectado`
+- `reconectando`
+- `desconectado`
+
+Socket.IO intenta reconectar automáticamente. Al recibir `sync:required`, las vistas vuelven a consultar la API para sincronizarse.
+
+### Eventos Socket.IO
+
+| Evento | Emisor | Payload | Uso |
+|---|---|---|---|
+| `catalog:changed` | Servidor | `{ action, videoId }` | Actualiza dashboard y catálogo |
+| `file:changed` | Servidor | `{ action, videoId, attachment/fileId }` | Actualiza adjuntos visibles |
+| `sync:required` | Servidor | `{ reason }` | Reconsulta datos después de reconectar |
+
+Los listeners se registran con `useEffect` y se eliminan al salir de cada vista, evitando duplicados al navegar.
+
+### Variables de entorno
+
+```env
+VITE_API_URL=http://localhost:3001
+VITE_REALTIME_URL=http://localhost:3001
+JWT_SECRET=change-this-secret-in-production
+```
