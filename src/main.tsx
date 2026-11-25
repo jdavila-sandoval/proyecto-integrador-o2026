@@ -6,14 +6,12 @@ import { cognitoAuthConfig } from "./auth/cognito";
 
 import App from "./App";
 import "./styles.css";
-import CognitoTest from "./auth/CognitoTest";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider {...cognitoAuthConfig}>
         <App />
-        {/* <CognitoTest /> */}
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

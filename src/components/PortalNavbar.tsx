@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useAuth } from "react-oidc-context";
+
 import { Logo } from "./Logo";
+import { LogoutButton } from "../auth/LogoutButton";
 
 export function PortalNavbar({
   role,
@@ -9,8 +12,16 @@ export function PortalNavbar({
   role: "Alumno" | "Docente";
   onRoleChange: (role: "Alumno" | "Docente") => void;
 }) {
-  const navigate = useNavigate();
+  const auth = useAuth();
+
+  const displayName =
+    auth.user?.profile.name ??
+    auth.user?.profile.email ??
+    "Usuario";
+
+  const initials = displayName.trim().slice(0, 2).toUpperCase();
   const [profileOpen, setProfileOpen] = useState(false);
+
   return (
     <header className="portal-header">
       <div className="portal-nav container">
@@ -43,14 +54,15 @@ export function PortalNavbar({
           >
             <span className="profile-avatar">JD</span>
             <span className="profile-name">
-              José Dávila<small>{role}</small>
+              { displayName }
+              <small>Sesión autenticada</small>
             </span>
             <span>⌄</span>
           </button>
           {profileOpen && (
             <div className="profile-menu">
               <Link to="/">Ir a inicio</Link>
-              <button onClick={() => navigate("/login")}>Cerrar sesión</button>
+              <LogoutButton />
             </div>
           )}
         </div>
