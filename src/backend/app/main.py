@@ -7,13 +7,22 @@ from uuid import uuid4
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 import unicodedata
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("edustream")
 
 app = FastAPI(title="EduStream API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
 
 region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 table_name = os.environ.get("DYNAMODB_TABLE", "EduStream_Videos")
