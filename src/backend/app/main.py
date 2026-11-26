@@ -88,7 +88,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/subjects", depencencies=[Depends(get_current_user)])
+@app.get("/subjects", dependencies=[Depends(get_current_user)])
 def list_subjects():
     try:
         items = []
