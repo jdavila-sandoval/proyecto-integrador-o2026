@@ -1,6 +1,6 @@
 import type { ChangeEvent, FormEvent } from "react";
 import type { VideoFieldErrors, VideoFormData } from "../../types";
-import { useSubjects } from "../../hooks/useSubject";
+import { useSubjects } from "../../hooks/useSubjects";
 
 interface VideoFormProps {
   data: VideoFormData;

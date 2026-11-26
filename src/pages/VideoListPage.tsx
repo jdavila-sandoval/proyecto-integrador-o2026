@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PortalLayout, usePortalRole } from "../components/PortalLayout";
 import { VideoRow } from "../components/ui/VideoRow";
-import { useSubjects } from "../hooks/useSubject";
+import { useSubjects } from "../hooks/useSubjects";
 import { useVideos } from "../hooks/useVideos";
 
 const ALL_SUBJECTS = "Todas las materias";
