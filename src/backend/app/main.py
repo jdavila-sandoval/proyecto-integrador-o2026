@@ -116,7 +116,7 @@ def list_subjects():
     )
 
 
-@app.get("/videos", depencencies=[Depends(get_current_user)])
+@app.get("/videos", dependencies=[Depends(get_current_user)])
 def list_videos():
     try:
         items = []
@@ -134,7 +134,7 @@ def list_videos():
         database_error(error)
 
 
-@app.get("/videos/{video_id}", depencencies=[Depends(get_current_user)])
+@app.get("/videos/{video_id}", dependencies=[Depends(get_current_user)])
 def get_video(video_id: str):
     try:
         response = videos_table.get_item(
