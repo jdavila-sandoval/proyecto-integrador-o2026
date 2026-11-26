@@ -4,23 +4,17 @@ import { useAuth } from "react-oidc-context";
 
 import { Logo } from "./Logo";
 import { LogoutButton } from "../auth/LogoutButton";
+import { useCurrentRole } from "../auth/CurrentUserContext";
 
-export function PortalNavbar({
-  role,
-  onRoleChange,
-}: {
-  role: "Alumno" | "Docente";
-  onRoleChange: (role: "Alumno" | "Docente") => void;
-}) {
+export function PortalNavbar() {
   const auth = useAuth();
+  const { role } = useCurrentRole();
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const displayName =
-    auth.user?.profile.name ??
-    auth.user?.profile.email ??
-    "Usuario";
+    auth.user?.profile.name ?? auth.user?.profile.email ?? "Usuario";
 
   const initials = displayName.trim().slice(0, 2).toUpperCase();
-  const [profileOpen, setProfileOpen] = useState(false);
 
   return (
     <header className="portal-header">
@@ -33,28 +27,17 @@ export function PortalNavbar({
             aria-label="Buscar en el portal"
           />
         </div>
-        <div className="role-toggle" aria-label="Cambiar vista">
-          <button
-            className={role === "Alumno" ? "active" : ""}
-            onClick={() => onRoleChange("Alumno")}
-          >
-            Vista Alumno
-          </button>
-          <button
-            className={role === "Docente" ? "active" : ""}
-            onClick={() => onRoleChange("Docente")}
-          >
-            Vista Docente
-          </button>
-        </div>
+        <span className="role-badge">{role ?? "Sin rol"}</span>
         <div className="profile-wrap">
           <button
+            type="button"
             className="profile-button"
-            onClick={() => setProfileOpen(!profileOpen)}
+            aria-expanded={profileOpen}
+            onClick={() => setProfileOpen((open) => !open)}
           >
-            <span className="profile-avatar">JD</span>
+            <span className="profile-avatar">{initials}</span>
             <span className="profile-name">
-              { displayName }
+              {displayName}
               <small>Sesión autenticada</small>
             </span>
             <span>⌄</span>

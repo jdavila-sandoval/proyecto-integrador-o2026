@@ -1,24 +1,23 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
 import { PortalNavbar } from "./PortalNavbar";
+import { useCurrentRole } from "../auth/CurrentUserContext";
 
 export function PortalLayout({
   children,
-  role,
-  onRoleChange,
 }: {
   children: ReactNode;
-  role: "Alumno" | "Docente";
-  onRoleChange: (role: "Alumno" | "Docente") => void;
+  role?: unknown;
+  onRoleChange?: unknown;
 }) {
   return (
     <>
-      <PortalNavbar role={role} onRoleChange={onRoleChange} />
+      <PortalNavbar />
       <main className="portal-main">{children}</main>
     </>
   );
 }
 
-export function usePortalRole() {
-  return useState<"Alumno" | "Docente">("Alumno");
+export function usePortalRole(): ["Alumno" | "Docente", () => void] {
+  const { role } = useCurrentRole();
+  return [role ?? "Alumno", () => undefined];
 }

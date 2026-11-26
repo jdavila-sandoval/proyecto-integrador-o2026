@@ -7,6 +7,7 @@ import { VideoListPage } from "./pages/VideoListPage";
 import { UploadVideoPage } from "./pages/UploadVideoPage";
 import { VideoDetailPage } from "./pages/VideoDetailPage";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
+import { RoleGuard } from "./components/RoleGuard";
 
 export default function App() {
   return (
@@ -26,7 +27,9 @@ export default function App() {
         path="/upload-video"
         element={
           <AuthGuard>
-            <UploadVideoPage />
+            <RoleGuard allow="Docente">
+              <UploadVideoPage />
+            </RoleGuard>
           </AuthGuard>
         }
       />

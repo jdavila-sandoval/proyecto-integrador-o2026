@@ -35,9 +35,11 @@ export function VideoListPage() {
             <h1>Catálogo de recursos publicados</h1>
             <p>Consulta los recursos registrados en la plataforma</p>
           </div>
-          <Link className="button button-primary" to="/upload-video">
-            + Nuevo recurso
-          </Link>
+          {role === "Docente" && (
+            <Link className="button button-primary" to="/upload-video">
+              ＋ Nuevo recurso
+            </Link>
+          )}
         </div>
 
         <div className="list-toolbar">
