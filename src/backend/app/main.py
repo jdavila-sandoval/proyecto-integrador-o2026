@@ -156,7 +156,7 @@ def get_video(video_id: str):
 
 
 @app.post("/videos", status_code=201)
-def create_video(data: VideoCreate, user: User = Depends(require_group["docentes"])):
+def create_video(data: VideoCreate, user: User = Depends(require_group("docentes"))):
     try:
         subject = subjects_table.get_item(
             Key={"subject_id": data.subject_id},
