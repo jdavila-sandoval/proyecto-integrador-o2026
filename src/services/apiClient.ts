@@ -118,7 +118,7 @@ export async function apiRequest<T>(
   console.debug("[api]", path, "token:", Boolean(token));
 
   if (token && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer: ${token}`);
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   let response: Response;
