@@ -40,7 +40,7 @@ export function VideoRow({
         </span>
       </div>
       <span className="video-row-duration">{video.duration}</span>
-      <span className="video-row-date">{video.uploadedAt}</span>
+      <span className="video-row-date">{formatDate(video.uploadedAt)}</span>
       <span className="video-row-views">{video.views}</span>
       <div className="row-actions">
         <button

@@ -1,3 +1,5 @@
+import { getIdToken } from "../auth/token";
+
 const API_URL = (import.meta.env.VITE_API_URL ?? "")
   .trim()
   .replace(/\/+$/, "")
@@ -110,6 +112,13 @@ export async function apiRequest<T>(
     !headers.has("Content-Type")
   ) {
     headers.set("Content-Type", "application/json");
+  }
+
+  const token = getIdToken();
+  console.debug("[api]", path, "token:", Boolean(token));
+
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer: ${token}`);
   }
 
   let response: Response;
