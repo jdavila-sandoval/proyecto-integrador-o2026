@@ -204,6 +204,9 @@ sudo docker run -d \
   -p 8000:8000 \
   -e AWS_DEFAULT_REGION=us-east-1 \
   -e DYNAMODB_TABLE=EduStream_Videos \
+  -e SUBJECTS_TABLE=EduStream_Subjects \
+  -e VIDEOS_BUCKET=edustream-videos-storage \
+  -e MAX_UPLOAD_BYTES=524288000 \
   -e COGNITO_REGION=us-east-1 \
   -e COGNITO_USER_POOL_ID=us-east-1_7hzqDk0GB \
   -e COGNITO_CLIENT_ID=6q15b1ifsh55d537bfrcgbvlfe \

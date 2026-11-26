@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+from botocore.config import Config
 from fastapi import Depends, FastAPI, HTTPException
 from .auth import User, get_current_user, require_group
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,13 +27,21 @@ app.add_middleware(
 )
 
 region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+videos_bucket = os.environ.get("VIDEOS_BUCKET", "edustream-videos-storage")
 videos_table_name = os.environ.get("DYNAMODB_TABLE", "EduStream_Videos")
 subjects_table_name = os.environ.get("SUBJECTS_TABLE", "EduStream_Subjects")
 
 dynamodb = boto3.resource("dynamodb", region_name=region)
+s3 = boto3.client("s3", region_name=region, config=Config(signature_version="s3v4"))
+
 videos_table = dynamodb.Table(videos_table_name)
 subjects_table = dynamodb.Table(subjects_table_name)
 
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 500 * 1024 * 1024))
+UPLOAD_URL_SECONDS = 900
+PLAYBACK_URL_SECONDS = 900
+
+EXTENSIONS = {"video/mp4": "mp4", "video/webm": "webm"}
 
 class VideoCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -40,6 +49,8 @@ class VideoCreate(BaseModel):
     unit: str = Field(min_length=1, max_length=100)
     description: str = Field(min_length=1, max_length=5000)
     visibility: Literal["campus", "group"] = "campus"
+    content_type: Literal["video/mp4", "video/webm"]
+    size_bytes: int = Field(gt=0, le=MAX_UPLOAD_BYTES)
 
     @field_validator(
         "title", "subject_id", "unit", "description",
@@ -72,6 +83,7 @@ def to_response(item: dict) -> dict:
         "uploadedAt": item["created_at"],
         "views": 0,
         "thumbnailClass": item.get("thumbnail_class", "thumb-blue"),
+        "status": item.get("status", "metadata_only"),
     }
 
 
@@ -81,6 +93,29 @@ def database_error(error):
         status_code=503,
         detail="No fue posible acceder a los datos.",
     ) from error
+
+
+def storage_error(error):
+    logger.exception("Error al operar con S3")
+    raise HTTPException(
+        status_code=503,
+        detail="No fue posible acceder al almacenamiento.",
+    ) from error
+
+
+def fetch_video(video_id: str) -> dict:
+    try:
+        item = videos_table.get_item(
+            Key={"video_id": video_id},
+            ConsistentRead=True,
+        ).get("Item")
+    except (BotoCoreError, ClientError) as error:
+        database_error(error)
+
+    if item is None:
+        raise HTTPException(status_code=404, detail="Recurso no encontrado.")
+
+    return item
 
 
 @app.get("/health")
@@ -129,34 +164,26 @@ def list_videos():
             )
             items.extend(response.get("Items", []))
 
-        return [to_response(item) for item in items]
+        return [to_response(item) for item in items if item.get("status") != "pending"]
     except (BotoCoreError, ClientError) as error:
         database_error(error)
 
 
-@app.get("/videos/{video_id}", dependencies=[Depends(get_current_user)])
-def get_video(video_id: str):
-    try:
-        response = videos_table.get_item(
-            Key={"video_id": video_id},
-            ConsistentRead=True,
-        )
-    except (BotoCoreError, ClientError) as error:
-        database_error(error)
+@app.get("/videos/{video_id}")
+def get_video(video_id: str, user: User = Depends(get_current_user)):
+    item = fetch_video(video_id)
 
-    item = response.get("Item")
-
-    if item is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Recurso no encontrado.",
-        )
+    if item.get("status") == "pending" and item.get("owner_sub") != user.sub:
+        raise HTTPException(status_code=404, detail="Recurso no encontrado.")
 
     return to_response(item)
 
 
 @app.post("/videos", status_code=201)
-def create_video(data: VideoCreate, user: User = Depends(require_group("docentes"))):
+def create_video(
+    data: VideoCreate,
+    user: User = Depends(require_group("docentes")),
+):
     try:
         subject = subjects_table.get_item(
             Key={"subject_id": data.subject_id},
@@ -169,13 +196,32 @@ def create_video(data: VideoCreate, user: User = Depends(require_group("docentes
             status_code=422,
             detail="La materia seleccionada no existe.",
         )
-    
-    now = datetime.now(timezone.utc).isoformat(
-            timespec="milliseconds"
-    ).replace("+00:00", "Z")
-    
+
+    video_id = str(uuid4())
+    object_key = f"videos/{video_id}/original.{EXTENSIONS[data.content_type]}"
+
+    try:
+        upload = s3.generate_presigned_post(
+            Bucket=videos_bucket,
+            Key=object_key,
+            Fields={"Content-Type": data.content_type},
+            Conditions=[
+                {"Content-Type": data.content_type},
+                ["content-length-range", 1, MAX_UPLOAD_BYTES],
+            ],
+            ExpiresIn=UPLOAD_URL_SECONDS,
+        )
+    except (BotoCoreError, ClientError) as error:
+        storage_error(error)
+
+    now = (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
     item = {
-        "video_id": str(uuid4()),
+        "video_id": video_id,
         "title": data.title,
         "title_normalized": normalize_title(data.title),
         "subject_id": data.subject_id,
@@ -188,9 +234,10 @@ def create_video(data: VideoCreate, user: User = Depends(require_group("docentes
         "updated_at": now,
         "thumbnail_class": "thumb-blue",
         "owner_sub": user.sub,
-        "created_at": now,
-        "updated_at": now,
-        "thumbnail_class": "thumb-blue",
+        "status": "pending",
+        "object_key": object_key,
+        "content_type": data.content_type,
+        "size_bytes": data.size_bytes,
     }
 
     try:
@@ -202,7 +249,91 @@ def create_video(data: VideoCreate, user: User = Depends(require_group("docentes
         database_error(error)
 
     logger.info("Recurso creado: %s", item["video_id"])
-    return to_response(item)
+    return {**to_response(item), "upload": upload}
+
+
+@app.post("/videos/{video_id}/complete")
+def complete_upload(
+    video_id: str,
+    user: User = Depends(require_group("docentes")),
+):
+    item = fetch_video(video_id)
+
+    if item.get("owner_sub") != user.sub:
+        raise HTTPException(status_code=403, detail="No eres el autor de este recurso.")
+
+    if item.get("status") == "ready":
+        return to_response(item)
+
+    if item.get("status") != "pending":
+        raise HTTPException(status_code=409, detail="Este recurso no admite archivo.")
+
+    try:
+        head = s3.head_object(Bucket=videos_bucket, Key=item["object_key"])
+    except ClientError as error:
+        if error.response["Error"]["Code"] in ("404", "NoSuchKey", "NotFound"):
+            raise HTTPException(
+                status_code=409,
+                detail="El archivo aún no se ha subido.",
+            ) from error
+        storage_error(error)
+    except BotoCoreError as error:
+        storage_error(error)
+
+    now = (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
+    try:
+        updated = videos_table.update_item(
+            Key={"video_id": video_id},
+            UpdateExpression="SET #s = :ready, size_bytes = :size, updated_at = :now",
+            ConditionExpression="#s = :pending",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={
+                ":ready": "ready",
+                ":pending": "pending",
+                ":size": head["ContentLength"],
+                ":now": now,
+            },
+            ReturnValues="ALL_NEW",
+        )["Attributes"]
+    except ClientError as error:
+        if error.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            raise HTTPException(status_code=409, detail="El estado cambió.") from error
+        database_error(error)
+    except BotoCoreError as error:
+        database_error(error)
+
+    return to_response(updated)
+
+
+@app.get("/videos/{video_id}/playback")
+def get_playback(video_id: str, user: User = Depends(get_current_user)):
+    item = fetch_video(video_id)
+
+    if item.get("status") != "ready":
+        raise HTTPException(
+            status_code=404,
+            detail="Este recurso aún no tiene un archivo disponible.",
+        )
+
+    try:
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": videos_bucket,
+                "Key": item["object_key"],
+                "ResponseContentType": item["content_type"],
+            },
+            ExpiresIn=PLAYBACK_URL_SECONDS,
+        )
+    except (BotoCoreError, ClientError) as error:
+        storage_error(error)
+
+    return {"url": url, "expiresIn": PLAYBACK_URL_SECONDS}
 
 
 @app.get("/me")
