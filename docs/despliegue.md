@@ -120,7 +120,7 @@ Detener el servidor local antes de utilizar el mismo puerto. Ejemplo Bash para m
 ```bash
 docker run -d \
   --name edustream-backend \
-  -p 127.0.0.1:8000:8000 \
+  -p 8000:8000 \
   -e AWS_DEFAULT_REGION=us-east-1 \
   -e DYNAMODB_TABLE=EduStream_Videos \
   -e AWS_SHARED_CREDENTIALS_FILE=/aws/credentials \

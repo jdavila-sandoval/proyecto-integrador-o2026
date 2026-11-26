@@ -1,6 +1,6 @@
 import type { ChangeEvent, FormEvent } from "react";
 import type { VideoFieldErrors, VideoFormData } from "../../types";
-import { subjects } from "../../data/mockVideos";
+import { useSubjects } from "../../hooks/useSubject";
 
 interface VideoFormProps {
   data: VideoFormData;
@@ -25,6 +25,12 @@ export function VideoForm({
     (field: keyof VideoFormData) =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       onChange(field, event.target.value);
+
+  const { subjects, loading, error } = useSubjects();
+  const selectedSubject = subjects.find(
+    (subject) => subject.id === data.subject_id
+  );
+
   return (
     <form onSubmit={onSubmit} noValidate>
       <label className="portal-field">
@@ -35,16 +41,28 @@ export function VideoForm({
       <div className="portal-form-row">
         <label className="portal-field">
           <span>Asignatura / Materia</span>
-          <select value={data.subject} onChange={update("subject")}>
-            <option value="">Selecciona una materia</option>
-            {subjects.map((subject) => <option key={subject}>{subject}</option>)}
+          <select
+            value={data.subject_id}
+            onChange={update("subject_id")}
+            disabled={loading || Boolean(error)}
+          >
+            <option value="">
+              {loading ? "Cargando materias..." : "Selecciona una materia"}
+            </option>
+            {subjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.name}
+              </option>
+            ))}
           </select>
-          {errors.subject && <small className="field-error">{errors.subject}</small>}
+          {error && <small className="field-error">{error}</small>}
+          {errors.subject_id && (
+            <small className="field-error">{errors.subject_id}</small>
+          )}
         </label>
         <label className="portal-field">
           <span>Código de materia</span>
-          <input value={data.code} onChange={update("code")} placeholder="Ej. NUB-204" />
-          {errors.code && <small className="field-error">{errors.code}</small>}
+          <input value={selectedSubject?.code ?? ""} readOnly />
         </label>
       </div>
       <label className="portal-field">

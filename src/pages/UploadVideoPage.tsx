@@ -9,8 +9,7 @@ import type { VideoFieldErrors, VideoFormData } from "../types";
 
 const initialForm: VideoFormData = {
   title: "",
-  subject: "",
-  code: "",
+  subject_id: "",
   unit: "",
   description: "",
   visibility: "campus",

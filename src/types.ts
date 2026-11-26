@@ -36,10 +36,15 @@ export interface VideoItem {
   currentTime?: string;
 }
 
+export interface Subject {
+  id: string;
+  name: string;
+  code: string;
+}
+
 export interface VideoFormData {
   title: string;
-  subject: string;
-  code: string;
+  subject_id: string;
   unit: string;
   description: string;
   visibility: "campus" | "group";

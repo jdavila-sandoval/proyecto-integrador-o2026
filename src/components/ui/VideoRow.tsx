@@ -3,8 +3,22 @@ import type { VideoItem } from "../../types";
 interface VideoRowProps {
   video: VideoItem;
   onPreview: (video: VideoItem) => void;
-  onEdit: (video: VideoItem) => void;
-  onDelete: (video: VideoItem) => void;
+  onEdit?: (video: VideoItem) => void;
+  onDelete?: (video: VideoItem) => void;
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
 }
 
 export function VideoRow({
@@ -35,19 +49,23 @@ export function VideoRow({
         >
           Ver
         </button>
-        <button
-          onClick={() => onEdit(video)}
-          aria-label={`Editar ${video.title}`}
-        >
-          Editar
-        </button>
-        <button
-          className="delete-action"
-          onClick={() => onDelete(video)}
-          aria-label={`Eliminar ${video.title}`}
-        >
-          ⌫
-        </button>
+        { onEdit && (
+          <button
+            onClick={() => onEdit(video)}
+            aria-label={`Editar ${video.title}`}
+          >
+            Editar
+          </button>
+        )}
+        { onDelete && (
+          <button
+            className="delete-action"
+            onClick={() => onDelete(video)}
+            aria-label={`Eliminar ${video.title}`}
+          >
+            ⌫
+          </button>
+        )}
       </div>
     </div>
   );

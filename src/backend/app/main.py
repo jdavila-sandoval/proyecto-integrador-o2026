@@ -25,25 +25,23 @@ app.add_middleware(
 )
 
 region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
-table_name = os.environ.get("DYNAMODB_TABLE", "EduStream_Videos")
+videos_table_name = os.environ.get("DYNAMODB_TABLE", "EduStream_Videos")
+subjects_table_name = os.environ.get("SUBJECTS_TABLE", "EduStream_Subjects")
 
-table = boto3.resource(
-    "dynamodb",
-    region_name=region,
-).Table(table_name)
+dynamodb = boto3.resource("dynamodb", region_name=region)
+videos_table = dynamodb.Table(videos_table_name)
+subjects_table = dynamodb.Table(subjects_table_name)
 
 
 class VideoCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     subject_id: str = Field(min_length=1, max_length=100)
-    subject: str = Field(min_length=1, max_length=200)
-    code: str = Field(min_length=1, max_length=100)
     unit: str = Field(min_length=1, max_length=100)
     description: str = Field(min_length=1, max_length=5000)
     visibility: Literal["campus", "group"] = "campus"
 
     @field_validator(
-        "title", "subject_id", "subject", "code", "unit", "description",
+        "title", "subject_id", "unit", "description",
         mode="before",
     )
     @classmethod
@@ -89,15 +87,43 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/subjects")
+def list_subjects():
+    try:
+        items = []
+        response = subjects_table.scan()
+        items.extend(response.get("Items", []))
+
+        while "LastEvaluatedKey" in response:
+            response = subjects_table.scan(
+                ExclusiveStartKey=response["LastEvaluatedKey"]
+            )
+            items.extend(response.get("Items", []))
+    except (BotoCoreError, ClientError) as error:
+        database_error(error)
+
+    return sorted(
+        (
+            {
+                "id": item["subject_id"],
+                "name": item["name"],
+                "code": item["code"],
+            }
+            for item in items
+        ),
+        key=lambda subject: subject["name"],
+    )
+
+
 @app.get("/videos")
 def list_videos():
     try:
         items = []
-        response = table.scan()
+        response = videos_table.scan()
         items.extend(response.get("Items", []))
 
         while "LastEvaluatedKey" in response:
-            response = table.scan(
+            response = videos_table.scan(
                 ExclusiveStartKey=response["LastEvaluatedKey"]
             )
             items.extend(response.get("Items", []))
@@ -110,7 +136,7 @@ def list_videos():
 @app.get("/videos/{video_id}")
 def get_video(video_id: str):
     try:
-        response = table.get_item(
+        response = videos_table.get_item(
             Key={"video_id": video_id},
             ConsistentRead=True,
         )
@@ -130,17 +156,30 @@ def get_video(video_id: str):
 
 @app.post("/videos", status_code=201)
 def create_video(data: VideoCreate):
-    now = datetime.now(timezone.utc).isoformat(
-        timespec="milliseconds"
-    ).replace("+00:00", "Z")
+    try:
+        subject = subjects_table.get_item(
+            Key={"subject_id": data.subject_id},
+        ).get("Item")
+    except (BotoCoreError, ClientError) as error:
+        database_error(error)
 
+    if subject is None:
+        raise HTTPException(
+            status_code=422,
+            detail="La materia seleccionada no existe.",
+        )
+    
+    now = datetime.now(timezone.utc).isoformat(
+            timespec="milliseconds"
+    ).replace("+00:00", "Z")
+    
     item = {
         "video_id": str(uuid4()),
         "title": data.title,
         "title_normalized": normalize_title(data.title),
         "subject_id": data.subject_id,
-        "subject_name": data.subject,
-        "code": data.code,
+        "subject_name": subject["name"],
+        "code": subject["code"],
         "unit": data.unit,
         "description": data.description,
         "visibility": data.visibility,
@@ -150,7 +189,7 @@ def create_video(data: VideoCreate):
     }
 
     try:
-        table.put_item(
+        videos_table.put_item(
             Item=item,
             ConditionExpression="attribute_not_exists(video_id)",
         )
