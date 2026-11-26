@@ -6,7 +6,8 @@ from uuid import uuid4
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from .auth import User, get_current_user, require_group
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 import unicodedata
@@ -87,7 +88,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/subjects")
+@app.get("/subjects", depencencies=[Depends(get_current_user)])
 def list_subjects():
     try:
         items = []
@@ -115,7 +116,7 @@ def list_subjects():
     )
 
 
-@app.get("/videos")
+@app.get("/videos", depencencies=[Depends(get_current_user)])
 def list_videos():
     try:
         items = []
@@ -133,7 +134,7 @@ def list_videos():
         database_error(error)
 
 
-@app.get("/videos/{video_id}")
+@app.get("/videos/{video_id}", depencencies=[Depends(get_current_user)])
 def get_video(video_id: str):
     try:
         response = videos_table.get_item(
@@ -155,7 +156,7 @@ def get_video(video_id: str):
 
 
 @app.post("/videos", status_code=201)
-def create_video(data: VideoCreate):
+def create_video(data: VideoCreate, user: User = Depends(require_group["docentes"])):
     try:
         subject = subjects_table.get_item(
             Key={"subject_id": data.subject_id},
@@ -186,6 +187,10 @@ def create_video(data: VideoCreate):
         "created_at": now,
         "updated_at": now,
         "thumbnail_class": "thumb-blue",
+        "owner_sub": user.sub,
+        "created_at": now,
+        "updated_at": now,
+        "thumbnail_class": "thumb-blue",
     }
 
     try:
@@ -198,3 +203,20 @@ def create_video(data: VideoCreate):
 
     logger.info("Recurso creado: %s", item["video_id"])
     return to_response(item)
+
+
+@app.get("/me")
+def me(user: User = Depends(get_current_user)):
+    if "docentes" in user.groups:
+        role = "docente"
+    elif "alumnos" in user.groups:
+        role = "alumno"
+    else:
+        role = None
+
+    return {
+        "sub": user.sub,
+        "email": user.email,
+        "groups": user.groups,
+        "role": role,
+    }

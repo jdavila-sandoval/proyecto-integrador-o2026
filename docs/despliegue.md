@@ -204,6 +204,9 @@ sudo docker run -d \
   -p 8000:8000 \
   -e AWS_DEFAULT_REGION=us-east-1 \
   -e DYNAMODB_TABLE=EduStream_Videos \
+  -e COGNITO_REGION=us-east-1 \
+  -e COGNITO_USER_POOL_ID=us-east-1_7hzqDk0GB \
+  -e COGNITO_CLIENT_ID=6q15b1ifsh55d537bfrcgbvlfe \
   edustream-backend:dev
 ```
 
