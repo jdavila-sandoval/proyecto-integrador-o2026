@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PortalLayout } from "../components/PortalLayout";
 import { ApiError } from "../services/apiClient";
@@ -16,6 +16,9 @@ export function VideoDetailPage() {
   const [video, setVideo] = useState<VideoItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const refreshed = useRef(false);
 
   useEffect(() => {
     if (!id) {
@@ -29,40 +32,63 @@ export function VideoDetailPage() {
     setLoading(true);
     setError(null);
     setVideo(null);
+    setPlaybackUrl(null);
+    setPlaybackError(null);
+    refreshed.current = false;
 
     videoService
       .get(id)
       .then((result) => {
-        if (!cancelled) {
-          setVideo(result);
-        }
+        if (!cancelled) setVideo(result);
       })
       .catch((reason) => {
-        if (cancelled) {
-          return;
-        }
-
-        if (reason instanceof ApiError && reason.status === 404) {
-          setError("No se encontró el recurso solicitado.");
-          return;
-        }
-
+        if (cancelled) return;
         setError(
-          reason instanceof Error
-            ? reason.message
-            : "No se pudo cargar el detalle.",
+          reason instanceof ApiError && reason.status === 404
+            ? "No se encontró el recurso solicitado."
+            : reason instanceof Error
+              ? reason.message
+              : "No se pudo cargar el detalle.",
         );
       })
       .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
   }, [id]);
+
+  const loadPlayback = useCallback(async (videoId: string) => {
+    try {
+      const info = await videoService.playback(videoId);
+      setPlaybackUrl(info.url);
+      setPlaybackError(null);
+    } catch (reason) {
+      setPlaybackUrl(null);
+      setPlaybackError(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudo preparar la reproducción.",
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (video?.status === "ready") {
+      void loadPlayback(String(video.id));
+    }
+  }, [video, loadPlayback]);
+
+  const onPlayerError = () => {
+    if (!video || refreshed.current) {
+      setPlaybackError("No se pudo reproducir el video.");
+      return;
+    }
+    refreshed.current = true;
+    void loadPlayback(String(video.id));
+  };
 
   return (
     <PortalLayout>
@@ -81,9 +107,20 @@ export function VideoDetailPage() {
 
         {!loading && !error && video && (
           <section className="detail-card">
-            <div className={`detail-video ${video.thumbnailClass}`}>
-              <span>▶</span>
-            </div>
+            {playbackUrl ? (
+              <video
+                className="detail-video"
+                controls
+                preload="metadata"
+                src={playbackUrl}
+                onError={onPlayerError}
+              />
+            ) : (
+              <div className={`detail-video ${video.thumbnailClass}`}>
+                <span>▶</span>
+              </div>
+            )}
+
             <div className="detail-content">
               <div className="eyebrow">
                 {video.subject} · {video.code}
@@ -97,13 +134,18 @@ export function VideoDetailPage() {
                   <span>Visibilidad: {visibilityLabels[video.visibility]}</span>
                 )}
                 <span>Registrado: {formatDate(video.uploadedAt)}</span>
-                <span>Duración: {video.duration}</span>
-                <span>Vistas: {video.views}</span>
               </div>
 
-              <button className="button button-primary" disabled>
-                Reproducción no disponible aún
-              </button>
+              {video.status !== "ready" && (
+                <p className="field-error">
+                  Este recurso todavía no tiene un archivo de video.
+                </p>
+              )}
+              {playbackError && (
+                <p className="field-error" role="alert">
+                  {playbackError}
+                </p>
+              )}
             </div>
           </section>
         )}

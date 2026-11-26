@@ -1,4 +1,6 @@
 export type UserRole = "Alumno" | "Profesor";
+export type VideoStatus = "ready" | "pending" | "metadata_only";
+
 
 export interface NotificationState {
   message: string;
@@ -21,7 +23,7 @@ export interface RegisterFormData {
 }
 
 export interface VideoItem {
-  id: number | string;
+  id: string;
   title: string;
   subject: string;
   code: string;
@@ -34,6 +36,7 @@ export interface VideoItem {
   visibility?: "campus" | "group";
   progress?: number;
   currentTime?: string;
+  status?: VideoStatus;
 }
 
 export interface Subject {
@@ -48,6 +51,20 @@ export interface VideoFormData {
   unit: string;
   description: string;
   visibility: "campus" | "group";
+}
+
+export interface UploadTarget {
+  url: string;
+  fields: Record<string, string>;
+}
+
+export interface CreatedVideo extends VideoItem {
+  upload: UploadTarget;
+}
+
+export interface PlaybackInfo {
+  url: string;
+  expiresIn: number;
 }
 
 export type VideoFieldErrors = Partial<Record<keyof VideoFormData, string>>;

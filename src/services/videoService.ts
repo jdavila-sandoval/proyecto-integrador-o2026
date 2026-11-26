@@ -1,19 +1,32 @@
-import type { VideoFormData, VideoItem } from "../types";
+import type {
+  CreatedVideo,
+  PlaybackInfo,
+  VideoFormData,
+  VideoItem,
+} from "../types";
 import { apiRequest } from "./apiClient";
 
 export const videoService = {
   list: () => apiRequest<VideoItem[]>("/videos"),
-  get: (id: string) => apiRequest<VideoItem>(`/videos/${encodeURIComponent(id)}`),
-  create: (data: VideoFormData) =>
-    apiRequest<VideoItem>("/videos", {
+
+  get: (id: string) =>
+    apiRequest<VideoItem>(`/videos/${encodeURIComponent(id)}`),
+
+  create: (data: VideoFormData, file: File) =>
+    apiRequest<CreatedVideo>("/videos", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        ...data,
+        content_type: file.type,
+        size_bytes: file.size,
+      }),
     }),
-  // update: (id: string | number, data: VideoFormData) =>
-  //   apiRequest<VideoItem>(`/videos/${encodeURIComponent(id)}`, {
-  //     method: "PATCH",
-  //     body: JSON.stringify(data),
-  //   }),
-  // remove: (id: string | number) =>
-  //   apiRequest<void>(`/videos/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  complete: (id: string) =>
+    apiRequest<VideoItem>(`/videos/${encodeURIComponent(id)}/complete`, {
+      method: "POST",
+    }),
+
+  playback: (id: string) =>
+    apiRequest<PlaybackInfo>(`/videos/${encodeURIComponent(id)}/playback`),
 };
