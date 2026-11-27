@@ -95,21 +95,16 @@ El flujo principal funciona de extremo a extremo, probado tanto con `curl` como 
 
 ---
 
-## Arquitectura de AWS y Diagramas
+## Arquitectura de AWS
 
-EduStream cuenta con dos diagramas de arquitectura para documentar tanto la infraestructura física desplegada como el flujo de interacción entre servicios:
+El siguiente diagrama representa la topología de infraestructura desplegada en AWS:
 
-### 1. Topología Integral de Infraestructura en AWS
+### Topología Integral de Infraestructura en AWS
 Representa todos los componentes aprovisionados en la región `us-east-1` (VPC, Subred, API Gateway, S3, EC2, Cognito, DynamoDB e IAM):
 
 ![Diagrama de arquitectura AWS de EduStream](docs/arquitectura-aws.svg)
 
 > La definición como código de este diagrama se encuentra en [`docs/arquitectura-aws.yaml`](docs/arquitectura-aws.yaml).
-
-### 2. Mapa de Interacción entre Servicios Cloud
-Mapea paso a paso las interacciones entre los componentes: descarga de la SPA, autenticación OIDC/PKCE, validación JWKS, operaciones DynamoDB con TTL, carga multipart directa a S3 y resiliencia:
-
-![Diagrama de interacción entre servicios AWS de EduStream](docs/diagrama-interaccion-servicios-aws.svg)
 
 ### Servicios y responsabilidades
 
