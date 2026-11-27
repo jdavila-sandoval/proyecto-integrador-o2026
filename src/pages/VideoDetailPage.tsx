@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useCurrentRole } from "../auth/CurrentUserContext";
 import { PortalLayout } from "../components/PortalLayout";
 import { ApiError } from "../services/apiClient";
 import { videoService } from "../services/videoService";
@@ -13,11 +14,14 @@ const visibilityLabels: Record<NonNullable<VideoItem["visibility"]>, string> = {
 
 export function VideoDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { role } = useCurrentRole();
   const [video, setVideo] = useState<VideoItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const refreshed = useRef(false);
 
   useEffect(() => {
@@ -90,6 +94,23 @@ export function VideoDetailPage() {
     void loadPlayback(String(video.id));
   };
 
+  const handleDelete = async () => {
+    if (!video) return;
+    const confirmed = window.confirm(
+      `¿Estás seguro de que deseas eliminar "${video.title}"? Esta acción borrará el archivo en S3 y su registro en la base de datos.`
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await videoService.delete(String(video.id));
+      navigate("/manage-videos");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo eliminar el recurso.");
+      setDeleting(false);
+    }
+  };
+
   return (
     <PortalLayout>
       <div className="portal-container container detail-page">
@@ -145,6 +166,20 @@ export function VideoDetailPage() {
                 <p className="field-error" role="alert">
                   {playbackError}
                 </p>
+              )}
+
+              {role === "Docente" && (
+                <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    style={{ color: "#ca665b", borderColor: "#ca665b" }}
+                    disabled={deleting}
+                    onClick={() => void handleDelete()}
+                  >
+                    {deleting ? "Eliminando..." : "🗑 Eliminar recurso"}
+                  </button>
+                </div>
               )}
             </div>
           </section>

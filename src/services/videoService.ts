@@ -29,4 +29,9 @@ export const videoService = {
 
   playback: (id: string) =>
     apiRequest<PlaybackInfo>(`/videos/${encodeURIComponent(id)}/playback`),
+
+  delete: (id: string) =>
+    apiRequest<void>(`/videos/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
 };

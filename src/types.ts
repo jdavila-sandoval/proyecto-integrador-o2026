@@ -37,6 +37,7 @@ export interface VideoItem {
   progress?: number;
   currentTime?: string;
   status?: VideoStatus;
+  subject_id?: string;
 }
 
 export interface Subject {

@@ -4,6 +4,7 @@ import { PortalLayout, usePortalRole } from "../components/PortalLayout";
 import { VideoRow } from "../components/ui/VideoRow";
 import { useSubjects } from "../hooks/useSubjects";
 import { useVideos } from "../hooks/useVideos";
+import { videoService } from "../services/videoService";
 
 const ALL_SUBJECTS = "Todas las materias";
 
@@ -26,6 +27,20 @@ export function VideoListPage() {
         (subject === ALL_SUBJECTS || video.subject === subject)
     );
   }, [videos, search, subject]);
+
+  const handleDelete = async (videoItem: (typeof videos)[number]) => {
+    const confirmed = window.confirm(
+      `¿Estás seguro de que deseas eliminar "${videoItem.title}"? Esta acción borrará el archivo en S3 y su registro.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await videoService.delete(String(videoItem.id));
+      await reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo eliminar el recurso.");
+    }
+  };
 
   return (
     <PortalLayout role={ role } onRoleChange={ setRole }>
@@ -104,6 +119,7 @@ export function VideoListPage() {
                 key={video.id}
                 video={video}
                 onPreview={(item) => navigate(`/videos/${item.id}`)}
+                onDelete={role === "Docente" ? handleDelete : undefined}
               />
             )) }
 
