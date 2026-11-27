@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
@@ -7,7 +8,7 @@ from uuid import uuid4
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from botocore.config import Config
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from .auth import User, get_current_user, require_group
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
@@ -19,11 +20,14 @@ logger = logging.getLogger("edustream")
 
 app = FastAPI(title="EduStream API")
 
+cors_origins_raw = os.environ.get("CORS_ORIGINS", "*")
+allowed_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_origins=allowed_origins,
+    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"],
+    allow_headers=["*"],
 )
 
 region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
@@ -220,6 +224,9 @@ def create_video(
         .replace("+00:00", "Z")
     )
 
+    pending_ttl_seconds = int(os.environ.get("PENDING_TTL_SECONDS", 7200))
+    ttl_epoch = int(time.time()) + pending_ttl_seconds
+
     item = {
         "video_id": video_id,
         "title": data.title,
@@ -238,6 +245,7 @@ def create_video(
         "object_key": object_key,
         "content_type": data.content_type,
         "size_bytes": data.size_bytes,
+        "ttl": ttl_epoch,
     }
 
     try:
@@ -289,9 +297,9 @@ def complete_upload(
     try:
         updated = videos_table.update_item(
             Key={"video_id": video_id},
-            UpdateExpression="SET #s = :ready, size_bytes = :size, updated_at = :now",
+            UpdateExpression="SET #s = :ready, size_bytes = :size, updated_at = :now REMOVE #ttl",
             ConditionExpression="#s = :pending",
-            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeNames={"#s": "status", "#ttl": "ttl"},
             ExpressionAttributeValues={
                 ":ready": "ready",
                 ":pending": "pending",
@@ -334,6 +342,38 @@ def get_playback(video_id: str, user: User = Depends(get_current_user)):
         storage_error(error)
 
     return {"url": url, "expiresIn": PLAYBACK_URL_SECONDS}
+
+
+@app.delete("/videos/{video_id}", status_code=204)
+def delete_video(
+    video_id: str,
+    user: User = Depends(require_group("docentes")),
+):
+    item = fetch_video(video_id)
+
+    if item.get("owner_sub") and item.get("owner_sub") != user.sub:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permiso para eliminar este recurso porque no eres su autor.",
+        )
+
+    object_key = item.get("object_key")
+    if object_key:
+        try:
+            s3.delete_object(Bucket=videos_bucket, Key=object_key)
+            logger.info("Objeto S3 eliminado: %s", object_key)
+        except (BotoCoreError, ClientError) as error:
+            logger.warning("Error al eliminar objeto S3 %s: %s", object_key, error)
+
+    try:
+        videos_table.delete_item(
+            Key={"video_id": video_id},
+        )
+        logger.info("Recurso eliminado de DynamoDB: %s", video_id)
+    except (BotoCoreError, ClientError) as error:
+        database_error(error)
+
+    return Response(status_code=204)
 
 
 @app.get("/me")
