@@ -12,7 +12,7 @@ Diagram:
 
     ApplicationClient:
       Type: AWS::Diagram::Resource
-      Title: "Usuario / navegador\nReact + Vite · ejecución local"
+      Title: "Usuarios (Docente / Alumno)\nNavegador Web · SPA React"
 
     AWSCloud:
       Type: AWS::Diagram::Cloud
@@ -20,42 +20,45 @@ Diagram:
       Direction: vertical
       Title: "AWS · us-east-1"
       Children:
-        - IdentityAndAPI
-        - VPC
+        - EdgeAndAuth
+        - BackendLayer
         - DataLayer
-        - InstanceRole
+        - IAMAndResilience
 
-    IdentityAndAPI:
+    EdgeAndAuth:
       Type: AWS::Diagram::HorizontalStack
       Children:
+        - FrontendGateway
+        - FrontendBucket
         - Cognito
-        - APIGateway
+        - BackendGateway
+
+    FrontendGateway:
+      Type: AWS::ApiGateway
+      Title: "API Gateway (Frontend Proxy)\nHTTPS · 4q76jvcjwa"
+
+    FrontendBucket:
+      Type: AWS::S3::Bucket
+      Title: "Amazon S3 (Frontend)\nedustream-frontend-jdavila\nStatic Website Hosting"
 
     Cognito:
       Type: AWS::Cognito::UserPool
-      Title: "Amazon Cognito\nUser Pool + Hosted UI\nOIDC/PKCE · grupos"
+      Title: "Amazon Cognito\nUser Pool: us-east-1_rNhUTDMSd\nHosted UI · OIDC/PKCE · grupos"
 
-    APIGateway:
+    BackendGateway:
       Type: AWS::ApiGateway
-      Title: "Amazon API Gateway\nHTTP directo a EC2 (script)"
+      Title: "API Gateway (Backend API)\nHTTPS · j72eps3z3f\nCORS: * · HTTP Proxy :8000"
 
-    VPC:
+    BackendLayer:
       Type: AWS::EC2::VPC
-      Title: "Amazon VPC"
+      Title: "Amazon VPC · Subred Pública"
       Direction: vertical
       Children:
-        - PublicSubnet
+        - EC2Backend
 
-    PublicSubnet:
-      Type: AWS::EC2::Subnet
-      Preset: PublicSubnet
-      Title: "Subred pública"
-      Children:
-        - Backend
-
-    Backend:
+    EC2Backend:
       Type: AWS::EC2::Instance
-      Title: "Amazon EC2\nDocker · FastAPI :8000\nSG del script: TCP/8000 desde 0.0.0.0/0"
+      Title: "Amazon EC2 (i-0da66503c5157fdcd)\nDocker · FastAPI + Uvicorn :8000\nSecurity Group: TCP/8000 + TCP/22"
 
     DataLayer:
       Type: AWS::Diagram::HorizontalStack
@@ -66,72 +69,110 @@ Diagram:
 
     VideosTable:
       Type: AWS::DynamoDB::Table
-      Title: "Amazon DynamoDB\nEduStream_Videos"
+      Title: "Amazon DynamoDB\nEduStream_Videos\nTTL activado (2h para pending)"
 
     SubjectsTable:
       Type: AWS::DynamoDB::Table
-      Title: "Amazon DynamoDB\nEduStream_Subjects"
+      Title: "Amazon DynamoDB\nEduStream_Subjects\nCatálogo de materias"
 
     VideosBucket:
       Type: AWS::S3::Bucket
-      Title: "Amazon S3\nedustream-videos-storage\nPrivado"
+      Title: "Amazon S3 (Videos)\nedustream-videos-storage-jdavila\nBucket privado · CORS habilitado"
+
+    IAMAndResilience:
+      Type: AWS::Diagram::HorizontalStack
+      Children:
+        - InstanceRole
+        - ResilienceScript
 
     InstanceRole:
       Type: AWS::IAM::Role
-      Title: "AWS IAM · LabRole\nPerfil de instancia EC2"
+      Title: "AWS IAM · LabRole\nPerfil de instancia EC2\nCredenciales temporales IMDSv2"
+
+    ResilienceScript:
+      Type: AWS::Diagram::Resource
+      Title: "Scripts de Resiliencia\nactualizar-entorno.ps1 / .sh\nSincroniza IP EC2 en API Gateway"
 
   Links:
     - Source: ApplicationClient
-      Target: Cognito
-      SourceArrowHead:
-        Type: Open
+      Target: FrontendGateway
       TargetArrowHead:
         Type: Open
       Labels:
         AutoRight:
-          Title: "OIDC/PKCE · Hosted UI + JWT"
+          Title: "1. Carga SPA (HTTPS)"
+
+    - Source: FrontendGateway
+      Target: FrontendBucket
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "Proxy a S3 Website"
 
     - Source: ApplicationClient
-      Target: APIGateway
-      TargetArrowHead:
-        Type: Open
-      Labels:
-        AutoRight:
-          Title: "HTTPS + JWT"
-
-    - Source: APIGateway
-      Target: Backend
-      TargetArrowHead:
-        Type: Open
-      Labels:
-        AutoRight:
-          Title: "HTTP directo · script"
-
-    - Source: Backend
       Target: Cognito
       TargetArrowHead:
         Type: Open
       Labels:
         AutoRight:
-          Title: "JWKS"
+          Title: "2. Login Hosted UI (OIDC/PKCE)"
 
-    - Source: Backend
+    - Source: Cognito
+      Target: ApplicationClient
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "Emite id_token JWT (grupo)"
+
+    - Source: ApplicationClient
+      Target: BackendGateway
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "3. API Calls (HTTPS + Bearer JWT)"
+
+    - Source: BackendGateway
+      Target: EC2Backend
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "Proxy HTTP :8000"
+
+    - Source: EC2Backend
+      Target: Cognito
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "Valida JWT con JWKS"
+
+    - Source: EC2Backend
       Target: VideosTable
       TargetArrowHead:
         Type: Open
+      Labels:
+        AutoRight:
+          Title: "CRUD Videos + TTL"
 
-    - Source: Backend
+    - Source: EC2Backend
       Target: SubjectsTable
       TargetArrowHead:
         Type: Open
+      Labels:
+        AutoRight:
+          Title: "Lee materias"
 
-    - Source: Backend
+    - Source: EC2Backend
       Target: VideosBucket
       TargetArrowHead:
         Type: Open
       Labels:
         AutoRight:
-          Title: "URL prefirmada"
+          Title: "Genera URLs prefirmadas / Delete"
 
     - Source: ApplicationClient
       Target: VideosBucket
@@ -139,12 +180,20 @@ Diagram:
         Type: Open
       Labels:
         AutoRight:
-          Title: "Upload + playback directos"
+          Title: "4. Upload POST / Streaming GET directo"
 
     - Source: InstanceRole
-      Target: Backend
+      Target: EC2Backend
       TargetArrowHead:
         Type: Open
       Labels:
         AutoRight:
-          Title: "Perfil de instancia"
+          Title: "Permisos DynamoDB y S3"
+
+    - Source: ResilienceScript
+      Target: BackendGateway
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "Actualiza IP de integración"

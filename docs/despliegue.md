@@ -12,7 +12,14 @@ El despliegue está optimizado para ejecutarse dentro del entorno restringido de
 
 ---
 
-## 2. Inventario de recursos desplegados en AWS
+## 2. Inventario y diagramas de recursos desplegados en AWS
+
+### Diagramas de arquitectura:
+- **Topología general de infraestructura:** [`docs/arquitectura-aws.svg`](arquitectura-aws.svg)
+- **Mapa de interacción entre servicios:** [`docs/diagrama-interaccion-servicios-aws.svg`](diagrama-interaccion-servicios-aws.svg)
+- **Definición YAML de arquitectura:** [`docs/arquitectura-aws.yaml`](arquitectura-aws.yaml)
+
+### Inventario de servicios y componentes:
 
 | Servicio | Recurso / Identificador | Rol en el sistema |
 |---|---|---|
