@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Arquitectura AWS de EduStream</title>
+  <desc id="description">Frontend local autenticado con Cognito que consume API Gateway, cuyo script configura una integración HTTP directa a EC2. FastAPI usa DynamoDB y S3; el navegador sube y reproduce videos directamente en S3 mediante URLs prefirmadas.</desc>
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#15803d"/>
+    </marker>
+    <marker id="arrow-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; }
+      .title { font-size: 30px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #475569; }
+      .boundary-title { font-size: 20px; font-weight: 700; }
+      .card-title { font-size: 18px; font-weight: 700; }
+      .card-copy { font-size: 14px; fill: #334155; }
+      .small { font-size: 13px; fill: #475569; }
+      .edge-label { font-size: 13px; font-weight: 700; paint-order: stroke; stroke: #fff; stroke-width: 6px; stroke-linejoin: round; }
+      .edge { fill: none; stroke-width: 2.5; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#fff"/>
+  <text x="54" y="48" class="title">EduStream · arquitectura de AWS</text>
+  <text x="55" y="76" class="subtitle">Flujos observados en el código y scripts del proyecto · región us-east-1</text>
+
+  <rect x="360" y="105" width="1190" height="820" rx="18" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+  <rect x="1325" y="119" width="190" height="32" rx="16" fill="#334155"/>
+  <text x="1420" y="141" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">AWS · us-east-1</text>
+
+  <rect x="48" y="355" width="265" height="192" rx="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+  <circle cx="87" cy="399" r="19" fill="#475569"/>
+  <path d="M55 448c3-20 15-31 32-31s29 11 32 31" fill="#475569"/>
+  <text x="143" y="393" class="card-title">Usuario</text>
+  <text x="143" y="418" class="card-copy">Docente o alumno</text>
+  <line x1="65" y1="465" x2="294" y2="465" stroke="#e2e8f0"/>
+  <text x="68" y="490" class="card-copy">Navegador</text>
+  <text x="68" y="514" class="small">React + TypeScript + Vite</text>
+  <text x="68" y="535" class="small">Local · no desplegado en AWS</text>
+
+  <rect x="448" y="184" width="260" height="150" rx="14" fill="#fff" stroke="#c026d3" stroke-width="2"/>
+  <rect x="448" y="184" width="260" height="42" rx="14" fill="#c026d3"/>
+  <path d="M448 212h260v14H448z" fill="#c026d3"/>
+  <text x="470" y="212" font-size="16" font-weight="700" fill="#fff">Amazon Cognito</text>
+  <text x="470" y="256" class="card-title">User Pool + Hosted UI</text>
+  <text x="470" y="282" class="card-copy">OIDC / PKCE · emite id_token JWT</text>
+  <text x="470" y="308" class="card-copy">Grupos: docentes, alumnos</text>
+
+  <rect x="807" y="184" width="300" height="150" rx="14" fill="#fff" stroke="#7c3aed" stroke-width="2"/>
+  <rect x="807" y="184" width="300" height="42" rx="14" fill="#7c3aed"/>
+  <path d="M807 212h300v14H807z" fill="#7c3aed"/>
+  <text x="829" y="212" font-size="16" font-weight="700" fill="#fff">Amazon API Gateway</text>
+  <text x="829" y="256" class="card-title">API v2 · integración HTTP directa</text>
+  <text x="829" y="282" class="card-copy">Script: IP pública EC2:8000</text>
+  <text x="829" y="308" class="card-copy">El backend valida el JWT con Cognito</text>
+
+  <rect x="692" y="416" width="536" height="359" rx="18" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <rect x="714" y="430" width="180" height="32" rx="16" fill="#2563eb"/>
+  <text x="804" y="452" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">Amazon VPC</text>
+  <rect x="730" y="478" width="460" height="271" rx="14" fill="#fff" stroke="#60a5fa" stroke-width="2"/>
+  <rect x="748" y="491" width="190" height="30" rx="15" fill="#dbeafe"/>
+  <text x="843" y="512" text-anchor="middle" font-size="14" font-weight="700">Subred pública</text>
+
+  <rect x="781" y="545" width="358" height="161" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <rect x="781" y="545" width="358" height="40" rx="12" fill="#ea580c"/>
+  <path d="M781 571h358v14H781z" fill="#ea580c"/>
+  <text x="804" y="572" font-size="16" font-weight="700" fill="#fff">Amazon EC2</text>
+  <text x="804" y="613" class="card-title">Docker · FastAPI / Uvicorn</text>
+  <text x="804" y="638" class="card-copy">API en puerto :8000 · permisos vía LabRole</text>
+  <rect x="800" y="656" width="322" height="32" rx="7" fill="#fee2e2"/>
+  <text x="961" y="677" text-anchor="middle" font-size="13" font-weight="700" fill="#991b1b">Security Group: script abre TCP/8000 a 0.0.0.0/0</text>
+
+  <rect x="1265" y="351" width="250" height="111" rx="12" fill="#fff" stroke="#4f46e5" stroke-width="2"/>
+  <rect x="1265" y="351" width="250" height="38" rx="12" fill="#4f46e5"/>
+  <path d="M1265 377h250v12H1265z" fill="#4f46e5"/>
+  <text x="1285" y="377" font-size="15" font-weight="700" fill="#fff">Amazon DynamoDB</text>
+  <text x="1285" y="418" class="card-title">EduStream_Videos</text>
+  <text x="1285" y="441" class="small">Metadatos y estado de videos</text>
+
+  <rect x="1265" y="492" width="250" height="111" rx="12" fill="#fff" stroke="#4f46e5" stroke-width="2"/>
+  <rect x="1265" y="492" width="250" height="38" rx="12" fill="#4f46e5"/>
+  <path d="M1265 518h250v12H1265z" fill="#4f46e5"/>
+  <text x="1285" y="518" font-size="15" font-weight="700" fill="#fff">Amazon DynamoDB</text>
+  <text x="1285" y="559" class="card-title">EduStream_Subjects</text>
+  <text x="1285" y="582" class="small">Catálogo de materias</text>
+
+  <rect x="1265" y="633" width="250" height="130" rx="12" fill="#fff" stroke="#15803d" stroke-width="2"/>
+  <rect x="1265" y="633" width="250" height="38" rx="12" fill="#15803d"/>
+  <path d="M1265 659h250v12H1265z" fill="#15803d"/>
+  <text x="1285" y="659" font-size="15" font-weight="700" fill="#fff">Amazon S3 · privado</text>
+  <text x="1285" y="700" class="card-title">edustream-videos-</text>
+  <text x="1285" y="723" class="card-title">storage</text>
+  <text x="1285" y="748" class="small">Objetos de video</text>
+
+  <rect x="770" y="813" width="420" height="77" rx="12" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <rect x="770" y="813" width="102" height="77" rx="12" fill="#dc2626"/>
+  <path d="M858 813h14v77h-14z" fill="#dc2626"/>
+  <text x="821" y="858" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">AWS IAM</text>
+  <text x="892" y="845" class="card-title">LabRole · perfil de instancia</text>
+  <text x="892" y="870" class="card-copy">Credenciales temporales · DynamoDB + S3</text>
+
+  <path class="edge" d="M313 382 H380 V258 H448" stroke="#7c3aed" marker-end="url(#arrow-purple)"/>
+  <text x="324" y="371" class="edge-label" fill="#6d28d9">Login OIDC / PKCE</text>
+
+  <path class="edge" d="M448 300 H408 V516 H313" stroke="#7c3aed" marker-end="url(#arrow-purple)"/>
+  <text x="330" y="565" class="edge-label" fill="#6d28d9">id_token JWT</text>
+
+  <path class="edge" d="M313 398 H345 V142 H957 V184" stroke="#2563eb" marker-end="url(#arrow-blue)"/>
+  <text x="568" y="135" class="edge-label" fill="#1d4ed8">HTTPS · Bearer token</text>
+
+  <path class="edge" d="M957 334 V464 H960 V545" stroke="#2563eb" marker-end="url(#arrow-blue)"/>
+  <rect x="969" y="398" width="192" height="26" rx="6" fill="#fff"/>
+  <text x="974" y="416" class="edge-label" fill="#1d4ed8">HTTP directo (script)</text>
+
+  <path class="edge" d="M781 600 H744 V352 H655 V334" stroke="#7c3aed" marker-end="url(#arrow-purple)"/>
+  <rect x="650" y="365" width="160" height="26" rx="6" fill="#fff"/>
+  <text x="657" y="383" class="edge-label" fill="#6d28d9">Backend consulta JWKS</text>
+
+  <path class="edge" d="M1139 582 H1225 V406 H1265" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <text x="1147" y="571" class="edge-label" fill="#166534">Metadatos</text>
+
+  <path class="edge" d="M1139 625 H1208 V548 H1265" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <text x="1147" y="650" class="edge-label" fill="#166534">Materias</text>
+
+  <path class="edge" d="M1139 667 H1237 V698 H1265" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <text x="1151" y="690" class="edge-label" fill="#166534">URLs prefirmadas</text>
+
+  <path class="edge" d="M313 520 H338 V926 H1238 V745 H1265" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <rect x="594" y="910" width="430" height="26" rx="6" fill="#fff"/>
+  <text x="604" y="928" class="edge-label" fill="#166534">Navegador ↔ S3: subida y reproducción directa</text>
+
+  <path class="edge" d="M980 813 V740 H960 V706" stroke="#64748b" stroke-dasharray="7 6" marker-end="url(#arrow-gray)"/>
+  <text x="991" y="778" class="edge-label" fill="#475569">Perfil de instancia</text>
+
+  <line x1="58" y1="972" x2="105" y2="972" stroke="#2563eb" stroke-width="3"/>
+  <text x="114" y="977" class="small">flujo de solicitud/datos</text>
+  <line x1="310" y1="972" x2="357" y2="972" stroke="#64748b" stroke-width="3" stroke-dasharray="7 6"/>
+  <text x="366" y="977" class="small">asociación IAM</text>
+  <text x="1538" y="977" text-anchor="end" class="small">Según script actual · revisar reglas de red antes de uso público</text>
+</svg>

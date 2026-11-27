@@ -1,0 +1,150 @@
+Diagram:
+  DefinitionFiles:
+    - Type: URL
+      Url: https://raw.githubusercontent.com/awslabs/diagram-as-code/main/definitions/definition-for-aws-icons-light.yaml
+  Resources:
+    Canvas:
+      Type: AWS::Diagram::Canvas
+      Direction: vertical
+      Children:
+        - ApplicationClient
+        - AWSCloud
+
+    ApplicationClient:
+      Type: AWS::Diagram::Resource
+      Title: "Usuario / navegador\nReact + Vite · ejecución local"
+
+    AWSCloud:
+      Type: AWS::Diagram::Cloud
+      Preset: AWSCloudNoLogo
+      Direction: vertical
+      Title: "AWS · us-east-1"
+      Children:
+        - IdentityAndAPI
+        - VPC
+        - DataLayer
+        - InstanceRole
+
+    IdentityAndAPI:
+      Type: AWS::Diagram::HorizontalStack
+      Children:
+        - Cognito
+        - APIGateway
+
+    Cognito:
+      Type: AWS::Cognito::UserPool
+      Title: "Amazon Cognito\nUser Pool + Hosted UI\nOIDC/PKCE · grupos"
+
+    APIGateway:
+      Type: AWS::ApiGateway
+      Title: "Amazon API Gateway\nHTTP directo a EC2 (script)"
+
+    VPC:
+      Type: AWS::EC2::VPC
+      Title: "Amazon VPC"
+      Direction: vertical
+      Children:
+        - PublicSubnet
+
+    PublicSubnet:
+      Type: AWS::EC2::Subnet
+      Preset: PublicSubnet
+      Title: "Subred pública"
+      Children:
+        - Backend
+
+    Backend:
+      Type: AWS::EC2::Instance
+      Title: "Amazon EC2\nDocker · FastAPI :8000\nSG del script: TCP/8000 desde 0.0.0.0/0"
+
+    DataLayer:
+      Type: AWS::Diagram::HorizontalStack
+      Children:
+        - VideosTable
+        - SubjectsTable
+        - VideosBucket
+
+    VideosTable:
+      Type: AWS::DynamoDB::Table
+      Title: "Amazon DynamoDB\nEduStream_Videos"
+
+    SubjectsTable:
+      Type: AWS::DynamoDB::Table
+      Title: "Amazon DynamoDB\nEduStream_Subjects"
+
+    VideosBucket:
+      Type: AWS::S3::Bucket
+      Title: "Amazon S3\nedustream-videos-storage\nPrivado"
+
+    InstanceRole:
+      Type: AWS::IAM::Role
+      Title: "AWS IAM · LabRole\nPerfil de instancia EC2"
+
+  Links:
+    - Source: ApplicationClient
+      Target: Cognito
+      SourceArrowHead:
+        Type: Open
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "OIDC/PKCE · Hosted UI + JWT"
+
+    - Source: ApplicationClient
+      Target: APIGateway
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "HTTPS + JWT"
+
+    - Source: APIGateway
+      Target: Backend
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "HTTP directo · script"
+
+    - Source: Backend
+      Target: Cognito
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "JWKS"
+
+    - Source: Backend
+      Target: VideosTable
+      TargetArrowHead:
+        Type: Open
+
+    - Source: Backend
+      Target: SubjectsTable
+      TargetArrowHead:
+        Type: Open
+
+    - Source: Backend
+      Target: VideosBucket
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "URL prefirmada"
+
+    - Source: ApplicationClient
+      Target: VideosBucket
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "Upload + playback directos"
+
+    - Source: InstanceRole
+      Target: Backend
+      TargetArrowHead:
+        Type: Open
+      Labels:
+        AutoRight:
+          Title: "Perfil de instancia"

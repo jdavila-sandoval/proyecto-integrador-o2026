@@ -1,6 +1,6 @@
 # EduStream
 
-Plataforma académica para publicar y consultar material audiovisual organizado por materia. Los docentes suben videos y los alumnos los consultan y reproducen, con autenticación real y almacenamiento en AWS.
+Plataforma académica para publicar y consultar material audiovisual organizado por materia. Los docentes suben videos y los alumnos los consultan y reproducen, con autenticación real mediante Amazon Cognito y almacenamiento en AWS.
 
 ## Integrantes
 
@@ -9,266 +9,299 @@ Plataforma académica para publicar y consultar material audiovisual organizado 
 
 ## Código y rama de trabajo
 
-Los cambios más recientes están en el repositorio remoto, en la rama **`feat/conectar-front-back`**:
+Los cambios más recientes están en el repositorio remoto, en la rama **`feature/actualizacion-documentacion-despliegue-aws`**:
 
 ```bash
 git clone https://github.com/jdavila-sandoval/proyecto-integrador-o2026.git
 cd proyecto-integrador-o2026
-git checkout feat/conectar-front-back
+git checkout feature/actualizacion-documentacion-despliegue-aws
 ```
 
-Actualización de este documento: 26 de noviembre de 2026.
+Actualización de este documento: 27 de noviembre de 2026.
+
+---
+
+## Enlaces del entorno desplegado en AWS
+
+El proyecto se encuentra 100% desplegado en la nube de AWS (región `us-east-1`):
+
+| Componente | URL / Identificador | Descripción |
+|---|---|---|
+| **Frontend Web (HTTPS)** | [https://4q76jvcjwa.execute-api.us-east-1.amazonaws.com](https://4q76jvcjwa.execute-api.us-east-1.amazonaws.com) | Aplicación React alojada en S3 estático con proxy HTTPS en API Gateway |
+| **Backend API (HTTPS)** | [https://j72eps3z3f.execute-api.us-east-1.amazonaws.com](https://j72eps3z3f.execute-api.us-east-1.amazonaws.com) | API Gateway v2 conectado con el contenedor FastAPI en EC2 |
+| **Cognito Hosted UI** | [https://edustream-auth-jdavila.auth.us-east-1.amazoncognito.com](https://edustream-auth-jdavila.auth.us-east-1.amazoncognito.com) | Portal de autenticación OIDC/OAuth 2.0 PKCE |
+| **User Pool ID** | `us-east-1_rNhUTDMSd` | Grupo de usuarios de EduStream en Cognito |
+| **App Client ID** | `6ihn9phjh33qc2b1i45mrmnptl` | Cliente web público (sin secret) |
+| **Bucket Frontend** | `edustream-frontend-jdavila` | Bucket S3 para archivos estáticos del frontend |
+| **Bucket Videos** | `edustream-videos-storage-jdavila` | Bucket S3 privado para almacenamiento de archivos de video |
+
+### Usuarios de prueba preconfigurados
+
+| Rol | Correo / Usuario | Contraseña | Grupo Cognito |
+|---|---|---|---|
+| **Docente** | `docente@iteso.mx` | `Password123!` | `docentes` |
+| **Alumno** | `alumno@iteso.mx` | `Password123!` | `alumnos` |
+
+---
 
 ## Estado actual
 
-El flujo principal funciona de extremo a extremo, probado con `curl` y desde la interfaz React: inicio de sesión, roles, catálogo, alta con archivo real, subida directa a S3 y reproducción.
+El flujo principal funciona de extremo a extremo, probado tanto con `curl` como desde la interfaz React desplegada en la nube: inicio de sesión, roles, catálogo, materias, alta con subida directa a S3, reproducción, eliminación de recursos y limpieza automática con TTL.
 
-| Componente | Estado |
-|---|---|
-| Frontend React, TypeScript y Vite | Funcional; se ejecuta en local con `npm run dev` |
-| Autenticación con Cognito (Hosted UI, OIDC) | Funcional |
-| Autorización por grupo (`docentes`, `alumnos`) | Funcional en la API y en las rutas del frontend |
-| Backend FastAPI en Docker sobre EC2 | Funcional |
-| API Gateway (REST, stage `dev`) con autorizador de Cognito | Funcional |
-| DynamoDB: `EduStream_Videos` y `EduStream_Subjects` | Funcional |
-| Bucket S3 privado `edustream-videos-storage` (`us-east-1`) | Funcional |
-| Subida de video (URL POST prefirmada, directo desde el navegador) | Funcional |
-| Reproducción (URL GET prefirmada de corta duración) | Funcional |
-| Catálogo, detalle, panel del docente y alta | Conectados a la API real |
+| Componente | Estado | Detalle |
+|---|---|---|
+| **Frontend React + TypeScript + Vite** | Funcional en la nube | Desplegado en S3 estático (`edustream-frontend-jdavila`) con proxy HTTPS API Gateway. Compatible también en local con `npm run dev`. |
+| **Autenticación con Cognito (Hosted UI, OIDC)** | Funcional | Flujo Authorization Code con PKCE. Tokens JWT validados en frontend y backend. |
+| **Autorización por grupo (`docentes`, `alumnos`)** | Funcional | Guardias de rol en rutas del frontend (`CurrentUserContext`) y dependencias de seguridad en FastAPI (`require_group`). |
+| **Backend FastAPI en Docker sobre EC2** | Funcional | Ejecutándose en instancia `t3.micro` con Docker. CORS dinámico vía variable de entorno. |
+| **API Gateway v2 (HTTP API)** | Funcional | Enrutamiento transparente HTTPS tanto para backend como para frontend. |
+| **DynamoDB: `EduStream_Videos`** | Funcional | Almacena metadatos. Cuenta con **TTL activado** (`ttl`) para eliminar automáticamente registros huérfanos tras 2 horas. |
+| **DynamoDB: `EduStream_Subjects`** | Funcional | Catálogo de materias activas (`SUB-NUBE`, `SUB-CLIENTE`, `SUB-ARQ`). |
+| **Bucket S3 privado (`edustream-videos-storage-jdavila`)** | Funcional | Almacenamiento seguro. Reglas de CORS habilitadas para carga multipart directa desde el navegador. |
+| **Subida de video (POST prefirmado)** | Funcional | Carga directa desde el cliente a S3 sin saturar el backend. Barra de progreso en tiempo real. |
+| **Confirmación de subida** | Funcional | Endpoint `POST /videos/{id}/complete` que verifica el objeto en S3, pasa estado a `ready` y remueve el TTL. |
+| **Reproducción de video (GET prefirmado)** | Funcional | Endpoint `GET /videos/{id}/playback` genera URL temporal de lectura en S3. |
+| **Eliminación de video (`DELETE /videos/{id}`)** | Funcional | Botón disponible para Docentes. Valida propiedad del recurso (`owner_sub`), elimina el archivo de S3 y el ítem de DynamoDB. |
+| **Script de resiliencia y recuperación** | Funcional | Automatiza la sincronización de IP de EC2 y API Gateway tras reinicios en AWS Learner Lab (`scripts/actualizar-entorno.ps1` y `.sh`). |
 
-### Qué puede hacer cada rol
+---
+
+### Matriz de permisos por rol
 
 | Acción | Alumno | Docente |
-|---|---|---|
-| Iniciar sesión con Cognito | Sí | Sí |
-| Ver catálogo y materias | Sí | Sí |
-| Ver detalle y reproducir | Sí | Sí |
-| Publicar video (metadatos + archivo) | No | Sí |
+|---|:---:|:---:|
+| Iniciar sesión mediante Cognito | ✅ | ✅ |
+| Consultar catálogo de videos publicados | ✅ | ✅ |
+| Filtrar videos por materia o búsqueda | ✅ | ✅ |
+| Ver detalle y reproducir videos (`ready`) | ✅ | ✅ |
+| Publicar nuevo video (metadatos + archivo en S3) | ❌ | ✅ |
+| Eliminar recursos propios (S3 + DynamoDB) | ❌ | ✅ |
+
+---
 
 ### Endpoints del backend
 
 | Método y ruta | Acceso | Descripción |
 |---|---|---|
-| `GET /health` | Público | Comprobación de vida del servicio |
-| `GET /me` | Usuario autenticado | Datos del usuario y su rol |
-| `GET /subjects` | Usuario autenticado | Materias disponibles |
-| `GET /videos` | Usuario autenticado | Catálogo de videos |
-| `GET /videos/{video_id}` | Usuario autenticado | Detalle de un video |
-| `POST /videos` | Grupo `docentes` | Crea el registro (`status: pending`) y devuelve la subida prefirmada |
-| `POST /videos/{video_id}/complete` | Grupo `docentes` | Verifica el objeto en S3 y marca el video como `ready` |
-| `GET /videos/{video_id}/playback` | Usuario autenticado | Devuelve una URL prefirmada para reproducir |
+| `GET /health` | Público | Comprobación de estado y conectividad del servicio |
+| `GET /me` | Usuario autenticado | Información del usuario autenticado y rol asignado |
+| `GET /subjects` | Usuario autenticado | Catálogo de materias disponibles |
+| `GET /videos` | Usuario autenticado | Catálogo de videos completados (`status: ready`) |
+| `GET /videos/{video_id}` | Usuario autenticado | Detalle y metadatos de un video específico |
+| `POST /videos` | Grupo `docentes` | Crea registro (`status: pending`) con TTL de 2h y genera URL prefirmada POST para S3 |
+| `POST /videos/{video_id}/complete` | Grupo `docentes` | Verifica el archivo en S3, actualiza estado a `ready` y elimina el atributo TTL |
+| `GET /videos/{video_id}/playback` | Usuario autenticado | Genera URL prefirmada GET temporal para reproducción directa |
+| `DELETE /videos/{video_id}` | Grupo `docentes` (autor) | Valida que `owner_sub` coincida con el usuario, borra el archivo en S3 y el registro en DynamoDB |
 
-### Modelo de datos
-
-- **`EduStream_Videos`**: identificador del video, título, `subject_id`, nombre y código de la materia, unidad, descripción, `visibility`, `owner_sub`, `status` (`pending` o `ready`), `object_key`, `content_type`, `size_bytes` y fecha de registro.
-- **`EduStream_Subjects`**: `id`, `name` y `code` de cada materia (por ejemplo `SUB-NUBE`, "Desarrollo en la Nube", `NUBE-01`).
-- **S3**: los archivos se guardan en `videos/{video_id}/original.mp4` (o la extensión que corresponda al tipo de contenido).
+---
 
 ## Arquitectura
 
-El siguiente diagrama muestra todos los servicios de nube utilizados, de la red al almacenamiento.
+El siguiente diagrama muestra la arquitectura integral implementada en Amazon Web Services:
 
-```mermaid
-flowchart TB
-    user(["Usuario<br/>docente o alumno"])
+![Diagrama de arquitectura AWS de EduStream](docs/arquitectura-aws.svg)
 
-    subgraph CLIENT["Cliente"]
-        react["Frontend React + TypeScript + Vite<br/>(ejecución local, localhost:5173)"]
-    end
+> La definición formal de la arquitectura se encuentra en [`docs/arquitectura-aws.yaml`](docs/arquitectura-aws.yaml).
 
-    subgraph AWS["AWS · región us-east-1"]
-
-        subgraph IDENTITY["Identidad"]
-            cognito["Amazon Cognito<br/>User Pool + Hosted UI<br/>Grupos: docentes, alumnos"]
-        end
-
-        subgraph EDGE["Entrada de la API"]
-            apigw["Amazon API Gateway (REST)<br/>Stage dev<br/>Autorizador Cognito, CORS,<br/>política de recursos por IP"]
-        end
-
-        subgraph NETWORK["Red · Amazon VPC"]
-            subgraph SUBNET["Subred pública"]
-                sg["Security Group<br/>entrada al puerto de la API"]
-                ec2["Amazon EC2<br/>Docker: contenedor FastAPI<br/>Uvicorn :8000"]
-            end
-        end
-
-        iam["AWS IAM<br/>LabRole (perfil de instancia)<br/>acceso a DynamoDB y S3"]
-
-        subgraph DATA["Datos"]
-            ddbv[("Amazon DynamoDB<br/>EduStream_Videos")]
-            ddbs[("Amazon DynamoDB<br/>EduStream_Subjects")]
-            s3[("Amazon S3<br/>edustream-videos-storage<br/>bucket privado + CORS")]
-        end
-    end
-
-    user --> react
-    react -- "1. Login OIDC (código + PKCE)" --> cognito
-    cognito -- "id_token (JWT) con grupo" --> react
-    react -- "2. HTTPS + Bearer token" --> apigw
-    apigw -. "valida el JWT" .-> cognito
-    apigw -- "3. HTTP proxy" --> sg
-    sg --> ec2
-    ec2 -- "lee y escribe metadatos" --> ddbv
-    ec2 -- "lee materias" --> ddbs
-    ec2 -- "genera URLs prefirmadas<br/>y verifica objetos" --> s3
-    iam -. "credenciales temporales" .-> ec2
-    react -- "4. POST prefirmado (subida directa)" --> s3
-    s3 -- "5. GET prefirmado (reproducción)" --> react
-```
-
-### Qué hace cada servicio
+### Servicios y responsabilidades
 
 | Servicio | Función en EduStream |
 |---|---|
-| **Amazon Cognito** | Registra usuarios, emite el `id_token` y define el rol mediante los grupos `docentes` y `alumnos`. Provee la pantalla de inicio de sesión (Hosted UI). |
-| **Amazon API Gateway** | Única puerta de entrada pública de la API. Valida el token con el autorizador de Cognito, aplica CORS y restringe orígenes por IP con una política de recursos. Reenvía las peticiones al backend con integración HTTP proxy. |
-| **Amazon VPC** | Red privada lógica donde vive la instancia. Define la subred y el enrutamiento. |
-| **Security Group** | Cortafuegos de la instancia: solo permite el tráfico necesario hacia el puerto de la API (y SSH para administración). |
-| **Amazon EC2 + Docker** | Ejecuta el contenedor con FastAPI. Concentra la lógica de negocio y la autorización por grupo. |
-| **AWS IAM (`LabRole`)** | El perfil de instancia entrega credenciales temporales al contenedor. No hay llaves incrustadas en la imagen ni en Git. |
-| **Amazon DynamoDB** | Persistencia de videos y materias. |
-| **Amazon S3** | Almacena los archivos de video en un bucket privado. El acceso es solo mediante URLs prefirmadas de corta duración. |
+| **Amazon Cognito** | Directorio de usuarios, autenticación OIDC/OAuth2 con Hosted UI, emisión de `id_token` y asignación de grupos (`docentes`, `alumnos`). |
+| **Amazon S3 (Frontend)** | Bucket `edustream-frontend-jdavila` configurado como Static Website Hosting para alojar la SPA (Single Page Application). |
+| **Amazon API Gateway (Frontend)** | API HTTP `edustream-frontend` (`4q76jvcjwa`) que actúa como proxy inverso HTTPS hacia el bucket S3 estático. |
+| **Amazon API Gateway (Backend)** | API HTTP `edustream-backend-api` (`j72eps3z3f`) que expone el backend con HTTPS y redirige el tráfico hacia el puerto 8000 de EC2. |
+| **Amazon EC2 + Docker** | Instancia Amazon Linux 2023 con contenedor Docker corriendo FastAPI + Uvicorn. Ejecuta la lógica de negocio y validación de tokens. |
+| **Security Groups** | Reglas de firewall de red. El script de resiliencia mantiene abierto el puerto TCP 8000 para el tráfico de la API. |
+| **AWS IAM (`LabRole`)** | Perfil de instancia que proporciona credenciales efímeras y seguras a la aplicación sin necesidad de almacenar llaves estáticas. |
+| **Amazon DynamoDB** | Base de datos NoSQL con las tablas `EduStream_Videos` (con TTL) y `EduStream_Subjects`. |
+| **Amazon S3 (Videos)** | Bucket privado `edustream-videos-storage-jdavila` con reglas CORS para carga directa multipart y streaming seguro vía URLs prefirmadas. |
 
-> **Pendiente de confirmar por el equipo:** el diagrama muestra la integración de API Gateway con el backend como HTTP proxy hacia la instancia EC2. Si en el despliegue se usa un VPC Link con un balanceador (NLB o ALB), o un nombre de subred o grupo de seguridad específico, actualizar esta sección con esos nombres reales.
+---
 
-## Flujo actual
-
-Publicación de un video por un docente y su reproducción posterior por cualquier usuario autenticado:
+## Flujo de subida, reproducción y eliminación
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor D as Docente
-    participant R as React (navegador)
+    participant R as React (Navegador)
     participant C as Cognito
     participant G as API Gateway
     participant B as FastAPI (EC2 + Docker)
     participant T as DynamoDB
-    participant S as S3 (privado)
+    participant S as S3 (Videos)
     actor A as Alumno
 
-    D->>R: Abre la aplicación
-    R->>C: Redirección al Hosted UI (OIDC, PKCE)
+    Note over D,R: 1. Inicio de sesión y autenticación
+    D->>R: Inicia sesión
+    R->>C: Redirección Hosted UI (PKCE)
     C-->>R: id_token con grupo docentes
-    R->>G: GET /me (Bearer token)
-    G->>C: Valida el token
-    G->>B: Reenvía la petición
-    B-->>R: Rol: docente
+    R->>G: GET /me (Bearer Token)
+    G->>B: Reenvía petición
+    B->>C: Valida token con JWKS
+    B-->>R: Rol: Docente
 
-    Note over D,R: Alta de un video
-    D->>R: Elige archivo (.mp4 o .webm, hasta 500 MB) y completa el formulario
-    R->>G: POST /videos (metadatos, content_type, size_bytes)
-    G->>B: Reenvía (solo grupo docentes)
-    B->>T: Busca la materia en EduStream_Subjects
-    B->>T: Guarda el video con status pending
-    B->>S: Genera POST prefirmado
-    B-->>R: Registro + URL y campos de subida
-    R->>S: POST multipart directo con el archivo (barra de progreso)
-    S-->>R: 204 No Content
+    Note over D,R: 2. Alta de video y subida directa a S3
+    D->>R: Selecciona archivo y llena formulario
+    R->>G: POST /videos
+    G->>B: Reenvía datos
+    B->>T: Guarda registro (status: pending, ttl: epoch + 2h)
+    B->>S: Genera URL prefirmada POST
+    B-->>R: Metadatos + campos de subida S3
+    R->>S: POST multipart directo con archivo binario
+    S-->>R: 204 No Content (subida exitosa)
     R->>G: POST /videos/{id}/complete
-    G->>B: Reenvía
-    B->>S: Verifica que el objeto existe
-    B->>T: Actualiza status a ready
-    B-->>R: Video listo
-    R-->>D: Redirige al detalle del video
+    G->>B: Reenvía confirmación
+    B->>S: Verifica existencia y tamaño del objeto
+    B->>T: Actualiza a status: ready y REMOVE ttl
+    B-->>R: Video publicado con éxito
 
-    Note over A,R: Reproducción
-    A->>R: Abre el detalle de un video
-    R->>G: GET /videos/{id}
-    G->>B: Reenvía
-    B->>T: Lee el registro
-    B-->>R: Metadatos con status ready
+    Note over A,R: 3. Consulta y reproducción
+    A->>R: Abre catálogo y selecciona video
     R->>G: GET /videos/{id}/playback
-    G->>B: Reenvía
-    B->>S: Genera GET prefirmado
-    B-->>R: URL temporal
-    R->>S: El reproductor descarga el video con la URL
-    S-->>R: Contenido del video
+    G->>B: Reenvía solicitud
+    B->>S: Genera URL prefirmada GET (duración corta)
+    B-->>R: URL temporal de streaming
+    R->>S: Descarga/reproduce streaming directo
+    S-->>R: Stream de video
+
+    Note over D,R: 4. Eliminación de recurso
+    D->>R: Clic en "Eliminar recurso"
+    R->>G: DELETE /videos/{id}
+    G->>B: Reenvía petición DELETE
+    B->>B: Valida que user.sub == item.owner_sub
+    B->>S: s3.delete_object(videos/{id}/original.mp4)
+    B->>T: videos_table.delete_item(video_id)
+    B-->>R: 204 No Content
+    R-->>D: Notifica eliminación y redirige al catálogo
 ```
 
-Si la URL prefirmada caduca durante la sesión, el reproductor solicita una nueva una vez antes de mostrar el error.
+---
 
-## Cómo ejecutar
+## Cómo ejecutar y desplegar
 
-### Frontend
+### 1. Variables de entorno del Frontend (`.env`)
 
-```bash
-npm install
-cp .env.example .env   # completar con los valores reales
-npm run dev
-```
-
-Variables del frontend (`.env`; ninguna es secreta, pero no se versiona el archivo real):
+Crea un archivo `.env` en la raíz del proyecto para desarrollo local o para compilar el frontend hacia producción:
 
 ```env
-VITE_COGNITO_AUTHORITY=
-VITE_COGNITO_CLIENT_ID=
-VITE_COGNITO_REDIRECT_URI=
-VITE_COGNITO_LOGOUT_URI=
-VITE_COGNITO_DOMAIN=
-VITE_API_URL=
+VITE_COGNITO_AUTHORITY=https://cognito-idp.us-east-1.amazonaws.com/us-east-1_rNhUTDMSd
+VITE_COGNITO_CLIENT_ID=6ihn9phjh33qc2b1i45mrmnptl
+VITE_COGNITO_REDIRECT_URI=https://4q76jvcjwa.execute-api.us-east-1.amazonaws.com/auth/callback
+VITE_COGNITO_LOGOUT_URI=https://4q76jvcjwa.execute-api.us-east-1.amazonaws.com
+VITE_COGNITO_DOMAIN=https://edustream-auth-jdavila.auth.us-east-1.amazoncognito.com
+VITE_API_URL=https://j72eps3z3f.execute-api.us-east-1.amazonaws.com
 ```
 
-`VITE_API_URL` debe apuntar al stage `dev` de API Gateway. La URI de redirección y la de cierre de sesión deben coincidir con las registradas en el cliente de aplicación de Cognito.
+> **Nota:** Para ejecutar localmente, cambia `VITE_COGNITO_REDIRECT_URI` a `http://localhost:5173/auth/callback` y `VITE_COGNITO_LOGOUT_URI` a `http://localhost:5173`. Ambas URLs ya están registradas en el App Client de Cognito.
 
-### Backend (Docker en EC2)
+### 2. Despliegue del Frontend a AWS S3
 
 ```bash
-cd src/backend
-docker build -t edustream-api .
-docker run -d --name edustream-api --restart unless-stopped \
+# Instalar dependencias y compilar
+npm install
+npm run build
+
+# Sincronizar archivos estáticos con el bucket S3
+aws s3 sync dist/ s3://edustream-frontend-jdavila/ --delete
+```
+
+### 3. Despliegue del Backend en EC2 (Docker)
+
+Conéctate a la instancia EC2 por SSH:
+
+```bash
+ssh -i "edustream-key.pem" ec2-user@<IP_PUBLICA_EC2>
+```
+
+Dentro de la instancia, construye y ejecuta el contenedor con todas sus variables de entorno:
+
+```bash
+cd proyecto-integrador-o2026/src/backend
+git pull
+sudo docker build -t edustream-api .
+
+# Detener contenedor previo si existe
+sudo docker stop edustream-backend 2>/dev/null || true
+sudo docker rm edustream-backend 2>/dev/null || true
+
+# Ejecutar el contenedor
+sudo docker run -d \
+  --name edustream-backend \
+  --restart unless-stopped \
   -p 8000:8000 \
-  -e VIDEOS_BUCKET=edustream-videos-storage \
-  -e <variables de Cognito del backend> \
+  -e AWS_DEFAULT_REGION=us-east-1 \
+  -e DYNAMODB_TABLE=EduStream_Videos \
+  -e SUBJECTS_TABLE=EduStream_Subjects \
+  -e VIDEOS_BUCKET=edustream-videos-storage-jdavila \
+  -e MAX_UPLOAD_BYTES=524288000 \
+  -e COGNITO_REGION=us-east-1 \
+  -e COGNITO_USER_POOL_ID=us-east-1_rNhUTDMSd \
+  -e COGNITO_CLIENT_ID=6ihn9phjh33qc2b1i45mrmnptl \
+  -e CORS_ORIGINS='*' \
   edustream-api
 ```
 
-- Las variables de Cognito que lee el backend (usuario y cliente de la aplicación) se definen en `src/backend/app`; completar el comando con los valores reales.
-- La instancia debe tener asociado el perfil IAM `LabRole`, con permisos sobre DynamoDB y S3 (`PutObject` y `GetObject` sobre el bucket). No se guardan credenciales en la imagen.
-- Comprobación: `curl http://localhost:8000/health` desde la instancia.
-
-### Prueba rápida con `curl`
-
+Verificar estado en EC2:
 ```bash
-API="https://<id>.execute-api.us-east-1.amazonaws.com/dev"
-TOKEN="<id_token de un docente>"
-
-curl -s "$API/me" -H "Authorization: Bearer $TOKEN"
-curl -s "$API/subjects" -H "Authorization: Bearer $TOKEN"
+curl http://localhost:8000/health
 ```
 
-## Fuera de alcance por el momento
+---
 
-Estos puntos no están implementados en esta entrega y no deben presentarse como funcionalidad completa:
+## Scripts de resiliencia (AWS Learner Lab)
 
-- **Control de acceso por `visibility`**: el campo se guarda y se muestra, pero no restringe nada. Un video "Privado para el grupo" lo puede ver cualquier usuario autenticado.
-- **Duración y vistas reales**: `duration` (`00:00`) y `views` (`0`) son valores de compatibilidad, no métricas. Por eso no se muestran en el detalle.
-- **Edición y eliminación** de videos desde la API y la interfaz.
-- **Autorización por propietario**: `owner_sub` se guarda, pero aún no se usa para limitar quién puede modificar un recurso.
-- **Miniaturas y procesamiento de video**: no hay generación de miniaturas, transcodificación ni cálculo de duración.
-- **Limpieza de registros `pending`**: una subida interrumpida deja un registro sin archivo que el catálogo no muestra y que no se elimina automáticamente.
-- **Subida de archivos muy grandes**: el límite es de 500 MB con un único POST prefirmado; no hay subida multiparte ni reanudación.
-- **Notas privadas, comentarios y búsqueda avanzada**.
-- **Frontend desplegado**: la interfaz se ejecuta en local; no está publicada en S3, CloudFront ni Amplify.
-- **HTTPS directo al backend, dominio propio y balanceador**: el acceso público pasa por API Gateway.
-- **Permisos mínimos**: se usa `LabRole` por las restricciones del entorno académico; en producción se crearía un rol con permisos mínimos.
-- **Despliegue automatizado**: no hay CI/CD, infraestructura como código ni observabilidad más allá de los logs del contenedor.
-- **Pruebas automatizadas** del frontend y del backend.
+Dado que en AWS Learner Lab las instancias EC2 cambian de dirección IP pública al apagarse o reiniciarse tras terminar la sesión de 4 horas, se incluyeron scripts automatizados de resiliencia:
 
-## Seguridad y limitaciones conocidas
+- **PowerShell (Windows):** `scripts/actualizar-entorno.ps1`
+- **Bash (Linux / macOS):** `scripts/actualizar-entorno.sh`
 
-- La autorización real ocurre en el servidor (grupos de Cognito); las comprobaciones de rutas en el frontend solo mejoran la experiencia.
-- El bucket es privado y no tiene acceso público. Los archivos solo se leen o escriben con URLs prefirmadas y de corta duración.
-- No almacenar credenciales, tokens, llaves SSH ni contraseñas en Git. No usar variables `VITE_` para secretos.
-- En AWS Learner Lab, las credenciales y los recursos pueden reiniciarse al terminar la sesión. Tras reiniciar el laboratorio, comprobar que el contenedor sigue activo y que mantiene sus variables de entorno.
-- La política de recursos de API Gateway restringe el acceso por IP durante el desarrollo. Si cambia la red del equipo, actualizarla y volver a desplegar el stage `dev`.
+### Qué hace el script automáticamente:
 
-## Documentación adicional
+1. Valida las credenciales de AWS activas (`aws sts get-caller-identity`).
+2. Obtiene la IP pública actual de la instancia EC2 (`i-0da66503c5157fdcd`) e inicia la instancia si está detenida.
+3. Actualiza el Security Group (`sg-0108695f0d2701501`) para permitir la entrada en el puerto 8000.
+4. Actualiza la integración HTTP de API Gateway (`j72eps3z3f` / integración `8m5f8ar`) para apuntar a la nueva IP de EC2 (`http://<NUEVA_IP>:8000`).
+5. Realiza un health check a través de la URL pública de API Gateway para confirmar la recuperación.
 
-- [Modelo de datos](docs/modelo-datos.md)
-- [API](docs/api.md)
-- [Despliegue y pruebas](docs/despliegue.md)
-- [Pendientes](docs/pendientes.md)
+**Uso:**
+```powershell
+.\scripts\actualizar-entorno.ps1
+```
 
-Los documentos de `docs/` conservan el estado del 9 de noviembre de 2026 (entrega intermedia) y deben actualizarse con los cambios descritos arriba.
+---
+
+## Pruebas rápidas con `curl`
+
+```bash
+API="https://j72eps3z3f.execute-api.us-east-1.amazonaws.com"
+
+# Comprobación pública de vida
+curl -s "$API/health"
+
+# Consultar catálogo de materias con token
+TOKEN="<id_token_cognito>"
+curl -s "$API/subjects" -H "Authorization: Bearer $TOKEN"
+
+# Consultar videos
+curl -s "$API/videos" -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Pendientes y trabajo futuro
+
+- **Edición de metadatos (`PATCH /videos/{id}`)**: Permitir actualizar título, materia, unidad y descripción de videos existentes.
+- **Consulta por materia mediante índice GSI (`SubjectIndex`)**: Optimizar consultas por materia en lugar de filtrar tras un Scan.
+- **Restricción estricta de visibilidad**: Filtrar videos con visibilidad `group` para que solo sean accesibles por los alumnos inscritos en dicho grupo.
+- **Transcodificación y generación de miniaturas**: Integrar AWS Lambda o MediaConvert para generar resoluciones adaptativas y miniaturas automáticas al completar la subida.
+
+---
+
+## Documentación detallada
+
+- [Modelo de datos y TTL](docs/modelo-datos.md)
+- [Especificación completa de la API](docs/api.md)
+- [Guía de despliegue y resiliencia](docs/despliegue.md)
+- [Control de pendientes y roadmap](docs/pendientes.md)

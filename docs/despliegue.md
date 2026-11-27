@@ -1,264 +1,302 @@
-# Despliegue y pruebas — EduStream
+# Guía de despliegue y resiliencia — EduStream
 
-## Alcance
+## 1. Alcance y contexto
 
-Procedimiento para llegar desde el backend local hasta Docker en EC2. Ejecución y resultados pendientes de confirmación. No incluye todavía el despliegue de API Gateway ni S3.
+Este documento describe la arquitectura de infraestructura, los pasos de despliegue y los procedimientos de resiliencia implementados en **Amazon Web Services (AWS)** para la plataforma EduStream.
 
-Los comandos multilínea utilizan Bash. En PowerShell escribirlos en una línea o adaptar los continuadores. Se utiliza us-east-1 como ejemplo: sustituir por la región real.
+El despliegue está optimizado para ejecutarse dentro del entorno restringido de **AWS Learner Lab** (cuenta `735415568412`, perfil IAM `LabRole`), resolviendo los desafíos característicos del entorno:
+- Sesiones de laboratorio efímeras de 4 horas con reinicio de IP pública en EC2.
+- Restricción de acceso a CloudFront (`AccessDenied`).
+- Exigencia de endpoints HTTPS para las URLs de redirección de Amazon Cognito.
+- Permisos administrados a través de `LabRole` sin capacidad para crear roles IAM personalizados.
 
-## 1. Requisitos
+---
 
-- Python, Git, Docker y AWS CLI disponibles.
-- Tabla EduStream_Videos con PK video_id de tipo String.
-- Credenciales locales autorizadas y vigentes.
-- Código inicial en src/backend/app/main.py.
-- requirements.txt, Dockerfile y .dockerignore preparados.
+## 2. Inventario de recursos desplegados en AWS
 
-```bash
-python --version
-git --version
-docker --version
-aws --version
-aws sts get-caller-identity
-aws dynamodb describe-table --table-name EduStream_Videos --region us-east-1
-```
+| Servicio | Recurso / Identificador | Rol en el sistema |
+|---|---|---|
+| **Amazon S3** | `edustream-frontend-jdavila` | Alojamiento de la aplicación estática React (Vite) |
+| **Amazon S3** | `edustream-videos-storage-jdavila` | Almacenamiento privado de videos con soporte CORS |
+| **Amazon API Gateway v2** | `4q76jvcjwa` (`edustream-frontend`) | Proxy HTTPS para servir el frontend estático |
+| **Amazon API Gateway v2** | `j72eps3z3f` (`edustream-backend-api`) | Entrada pública HTTPS para la API REST del backend |
+| **Amazon EC2** | `i-0da66503c5157fdcd` (`t3.micro`) | Instancia Amazon Linux 2023 con Docker para FastAPI |
+| **Security Group** | `sg-0108695f0d2701501` (`edustream-backend-sg`) | Control de tráfico de entrada (puertos 22 y 8000) |
+| **Amazon Cognito** | `us-east-1_rNhUTDMSd` (`EduStream_UserPool`) | Directorio de usuarios, grupos y autenticación |
+| **Cognito App Client** | `6ihn9phjh33qc2b1i45mrmnptl` (`edustream-web-client`) | Cliente público web OIDC con PKCE |
+| **Cognito Domain** | `edustream-auth-jdavila` | Hosted UI para inicio de sesión seguro |
+| **Amazon DynamoDB** | `EduStream_Videos` | Tabla de metadatos de videos con TTL activado |
+| **Amazon DynamoDB** | `EduStream_Subjects` | Tabla de catálogo de materias académicas |
 
-En Learner Lab, las credenciales temporales locales requieren access key, secret key y session token. Guardarlas fuera del repositorio en el archivo compartido de AWS. Renovarlas al expirar.
+---
 
-## 2. Ejecución local
+## 3. Despliegue de la infraestructura paso a paso
 
-```bash
-cd src/backend
-python -m venv .venv
-```
+### Paso 1: Configuración de Amazon Cognito
 
-Activación en Bash:
+1. **Creación del User Pool y grupos:**
+   ```bash
+   aws cognito-idp create-user-pool \
+     --pool-name EduStream_UserPool \
+     --region us-east-1
 
-```bash
-source .venv/bin/activate
-```
+   aws cognito-idp create-group --group-name docentes --user-pool-id us-east-1_rNhUTDMSd
+   aws cognito-idp create-group --group-name alumnos --user-pool-id us-east-1_rNhUTDMSd
+   ```
 
-Activación en PowerShell:
+2. **Creación de usuarios iniciales:**
+   ```bash
+   # Docente
+   aws cognito-idp admin-create-user \
+     --user-pool-id us-east-1_rNhUTDMSd \
+     --username docente@iteso.mx \
+     --user-attributes Name=email,Value=docente@iteso.mx Name=email_verified,Value=true \
+     --message-action SUPPRESS
 
+   aws cognito-idp admin-set-user-password \
+     --user-pool-id us-east-1_rNhUTDMSd \
+     --username docente@iteso.mx \
+     --password "Password123!" --permanent
+
+   aws cognito-idp admin-add-user-to-group \
+     --user-pool-id us-east-1_rNhUTDMSd \
+     --username docente@iteso.mx \
+     --group-name docentes
+
+   # Alumno
+   aws cognito-idp admin-create-user \
+     --user-pool-id us-east-1_rNhUTDMSd \
+     --username alumno@iteso.mx \
+     --user-attributes Name=email,Value=alumno@iteso.mx Name=email_verified,Value=true \
+     --message-action SUPPRESS
+
+   aws cognito-idp admin-set-user-password \
+     --user-pool-id us-east-1_rNhUTDMSd \
+     --username alumno@iteso.mx \
+     --password "Password123!" --permanent
+
+   aws cognito-idp admin-add-user-to-group \
+     --user-pool-id us-east-1_rNhUTDMSd \
+     --username alumno@iteso.mx \
+     --group-name alumnos
+   ```
+
+3. **Configuración del App Client con soporte para redirección HTTPS y flujos de autenticación:**
+   ```bash
+   aws cognito-idp create-user-pool-client \
+     --user-pool-id us-east-1_rNhUTDMSd \
+     --client-name edustream-web-client \
+     --no-generate-secret \
+     --allowed-o-auth-flows code \
+     --allowed-o-auth-scopes email openid profile \
+     --allowed-o-auth-flows-user-pool-client \
+     --explicit-auth-flows ALLOW_USER_PASSWORD_AUTH ALLOW_USER_SRP_AUTH ALLOW_REFRESH_TOKEN_AUTH \
+     --callback-urls "http://localhost:5173/auth/callback" "https://4q76jvcjwa.execute-api.us-east-1.amazonaws.com/auth/callback" \
+     --logout-urls "http://localhost:5173" "https://4q76jvcjwa.execute-api.us-east-1.amazonaws.com"
+   ```
+
+4. **Creación del dominio Hosted UI:**
+   ```bash
+   aws cognito-idp create-user-pool-domain \
+     --user-pool-id us-east-1_rNhUTDMSd \
+     --domain edustream-auth-jdavila
+   ```
+
+---
+
+### Paso 2: Despliegue del Frontend en S3 con Proxy HTTPS
+
+Dado que S3 Static Website Hosting solo entrega tráfico vía HTTP y Cognito rechaza callbacks HTTP no locales, se utilizó un API Gateway HTTP API como proxy transparente HTTPS.
+
+1. **Creación y configuración del bucket S3:**
+   ```bash
+   aws s3 mb s3://edustream-frontend-jdavila --region us-east-1
+   aws s3api delete-public-access-block --bucket edustream-frontend-jdavila
+
+   # Configurar como sitio web estático
+   aws s3api put-bucket-website --bucket edustream-frontend-jdavila \
+     --website-configuration '{"IndexDocument": {"Suffix": "index.html"}, "ErrorDocument": {"Key": "index.html"}}'
+   ```
+
+2. **Política de lectura pública:**
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "PublicReadGetObject",
+         "Effect": "Allow",
+         "Principal": "*",
+         "Action": "s3:GetObject",
+         "Resource": "arn:aws:s3:::edustream-frontend-jdavila/*"
+       }
+     ]
+   }
+   ```
+   ```bash
+   aws s3api put-bucket-policy --bucket edustream-frontend-jdavila --policy file://bucket-policy.json
+   ```
+
+3. **Creación de API Gateway como proxy HTTPS hacia S3 Website:**
+   ```bash
+   aws apigatewayv2 create-api \
+     --name edustream-frontend \
+     --protocol-type HTTP \
+     --target "http://edustream-frontend-jdavila.s3-website-us-east-1.amazonaws.com"
+   ```
+
+4. **Compilación y despliegue del código React:**
+   ```bash
+   npm run build
+   aws s3 sync dist/ s3://edustream-frontend-jdavila/ --delete
+   ```
+
+---
+
+### Paso 3: Almacenamiento de Videos en S3
+
+1. **Crear bucket privado:**
+   ```bash
+   aws s3 mb s3://edustream-videos-storage-jdavila --region us-east-1
+   ```
+
+2. **Configuración de CORS para subida directa desde el navegador:**
+   ```json
+   {
+     "CORSRules": [
+       {
+         "AllowedHeaders": ["*"],
+         "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
+         "AllowedOrigins": ["*"],
+         "ExposeHeaders": ["ETag"]
+       }
+     ]
+   }
+   ```
+   ```bash
+   aws s3api put-bucket-cors --bucket edustream-videos-storage-jdavila --cors-configuration file://s3-cors.json
+   ```
+
+---
+
+### Paso 4: Tablas de Amazon DynamoDB
+
+1. **Crear tabla `EduStream_Videos` y activar TTL:**
+   ```bash
+   aws dynamodb create-table \
+     --table-name EduStream_Videos \
+     --attribute-definitions AttributeName=video_id,AttributeType=S \
+     --key-schema AttributeName=video_id,KeyType=HASH \
+     --billing-mode PAY_PER_REQUEST \
+     --region us-east-1
+
+   # Activar Time-To-Live en el atributo 'ttl'
+   aws dynamodb update-time-to-live \
+     --table-name EduStream_Videos \
+     --time-to-live-specification "Enabled=true, AttributeName=ttl"
+   ```
+
+2. **Crear tabla `EduStream_Subjects` y poblar materias:**
+   ```bash
+   aws dynamodb create-table \
+     --table-name EduStream_Subjects \
+     --attribute-definitions AttributeName=subject_id,AttributeType=S \
+     --key-schema AttributeName=subject_id,KeyType=HASH \
+     --billing-mode PAY_PER_REQUEST \
+     --region us-east-1
+   ```
+
+   Inserción de materias académicas:
+   - `SUB-NUBE`: "Desarrollo en la Nube" (`NUBE-01`)
+   - `SUB-CLIENTE`: "Tecnologías en el Cliente" (`CLIENTE-01`)
+   - `SUB-ARQ`: "Arquitectura de Software" (`ARQ-01`)
+
+---
+
+### Paso 5: Despliegue del Backend en EC2 con Docker
+
+1. **Conexión SSH a la instancia EC2:**
+   ```bash
+   ssh -i "edustream-key.pem" ec2-user@<IP_PUBLICA_EC2>
+   ```
+
+2. **Instalación de Docker y Git:**
+   ```bash
+   sudo dnf install -y docker git
+   sudo systemctl enable --now docker
+   ```
+
+3. **Construcción y ejecución del contenedor:**
+   ```bash
+   cd proyecto-integrador-o2026/src/backend
+   git pull
+   sudo docker build -t edustream-api .
+
+   sudo docker stop edustream-backend 2>/dev/null || true
+   sudo docker rm edustream-backend 2>/dev/null || true
+
+   sudo docker run -d \
+     --name edustream-backend \
+     --restart unless-stopped \
+     -p 8000:8000 \
+     -e AWS_DEFAULT_REGION=us-east-1 \
+     -e DYNAMODB_TABLE=EduStream_Videos \
+     -e SUBJECTS_TABLE=EduStream_Subjects \
+     -e VIDEOS_BUCKET=edustream-videos-storage-jdavila \
+     -e MAX_UPLOAD_BYTES=524288000 \
+     -e COGNITO_REGION=us-east-1 \
+     -e COGNITO_USER_POOL_ID=us-east-1_rNhUTDMSd \
+     -e COGNITO_CLIENT_ID=6ihn9phjh33qc2b1i45mrmnptl \
+     -e CORS_ORIGINS='*' \
+     edustream-api
+   ```
+
+---
+
+### Paso 6: Configuración del API Gateway para el Backend
+
+1. **Crear API HTTP apuntando a la IP de EC2:**
+   ```bash
+   aws apigatewayv2 create-api \
+     --name edustream-backend-api \
+     --protocol-type HTTP \
+     --target "http://<IP_PUBLICA_EC2>:8000"
+   ```
+
+2. **Configuración de CORS en API Gateway:**
+   ```bash
+   aws apigatewayv2 update-api \
+     --api-id j72eps3z3f \
+     --cors-configuration '{
+       "AllowOrigins": ["*"],
+       "AllowMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+       "AllowHeaders": ["Content-Type", "Authorization"]
+     }'
+   ```
+
+---
+
+## 4. Procedimiento de resiliencia y recuperación automática
+
+En AWS Learner Lab, al cerrar o reiniciar la sesión de 4 horas, la instancia EC2 se detiene y al volverse a encender adquiere una **nueva dirección IP pública**.
+
+Para no tener que reconfigurar manualmente las integraciones de API Gateway ni los Security Groups, se crearon scripts que automatizan el 100% de la recuperación:
+
+### Ejecución en Windows (PowerShell):
 ```powershell
-.\.venv\Scripts\Activate.ps1
+.\scripts\actualizar-entorno.ps1
 ```
 
-Si requirements.txt ya existe:
-
+### Ejecución en Linux / macOS (Bash):
 ```bash
-python -m pip install -r requirements.txt
+chmod +x scripts/actualizar-entorno.sh
+./scripts/actualizar-entorno.sh
 ```
 
-Si aún no se ha generado, instalar las dependencias y registrar sus versiones:
-
-```bash
-python -m pip install fastapi "uvicorn[standard]" boto3
-python -m pip freeze > requirements.txt
-```
-
-Configuración Bash:
-
-```bash
-export AWS_DEFAULT_REGION=us-east-1
-export DYNAMODB_TABLE=EduStream_Videos
-```
-
-Configuración PowerShell:
-
-```powershell
-$env:AWS_DEFAULT_REGION = "us-east-1"
-$env:DYNAMODB_TABLE = "EduStream_Videos"
-```
-
-Iniciar:
-
-```bash
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Abrir http://localhost:8000/docs y ejecutar las pruebas de docs/api.md. No continuar sin verificar lectura y escritura en la tabla real.
-
-## 3. Docker local
-
-Dockerfile previsto:
-
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN useradd --create-home appuser
-COPY --chown=appuser:appuser app ./app
-USER appuser
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-.dockerignore previsto:
-
-```text
-.venv/
-__pycache__/
-*.pyc
-.env
-.env.*
-.aws/
-.git/
-```
-
-Desde src/backend:
-
-```bash
-docker build -t edustream-backend:dev .
-```
-
-Detener el servidor local antes de utilizar el mismo puerto. Ejemplo Bash para montar las credenciales locales como solo lectura:
-
-```bash
-docker run -d \
-  --name edustream-backend \
-  -p 8000:8000 \
-  -e AWS_DEFAULT_REGION=us-east-1 \
-  -e DYNAMODB_TABLE=EduStream_Videos \
-  -e AWS_SHARED_CREDENTIALS_FILE=/aws/credentials \
-  -e AWS_CONFIG_FILE=/aws/config \
-  -v "$HOME/.aws:/aws:ro" \
-  edustream-backend:dev
-```
-
-Comprobar que el usuario del contenedor tenga permisos para leer los archivos montados sin ampliar innecesariamente sus permisos en el host. No copiar credenciales a la imagen como solución.
-
-```bash
-docker ps
-docker logs --tail 100 edustream-backend
-docker restart edustream-backend
-```
-
-Repetir GET y POST en http://localhost:8000/docs. Comprobar que el recurso permanece después del reinicio.
-
-## 4. Configuración de EC2
-
-Propuesta:
-
-| Propiedad | Configuración |
-|---|---|
-| Nombre | edustream-backend-dev |
-| AMI | Amazon Linux 2023 |
-| Arquitectura | x86_64 |
-| Tipo | Pequeño y autorizado por el laboratorio |
-| Región | Preferentemente la de DynamoDB |
-| Acceso | Key pair autorizado |
-| Red inicial | Subred con salida a Internet e IP pública para la prueba directa |
-| Perfil IAM | Autorizado para acceder a la tabla |
-
-Permisos requeridos por el código inicial: dynamodb:GetItem, dynamodb:PutItem y dynamodb:Scan sobre la tabla. Query será necesario cuando se implemente la consulta al índice. Limitar recursos según los permisos disponibles y las reglas del laboratorio.
-
-Utilizar el perfil IAM de la instancia, no las credenciales locales. Mantener IMDSv2 requerido y revisar el hop limit 2 para acceso desde contenedores bridge, sujeto a los permisos del entorno.
-
-Security group para la prueba:
-
-| Puerto | Origen |
-|---|---|
-| TCP 22 | IP pública del equipo /32 |
-| TCP 8000 | IP pública del equipo /32 |
-
-Esta regla de 8000 es temporal; no resuelve por sí misma la futura conectividad de API Gateway. No abrir una API sin autenticación a todo Internet.
-
-## 5. Instalación y despliegue en Amazon Linux 2023
-
-```bash
-ssh -i "tu-llave.pem" ec2-user@IP_PUBLICA_EC2
-```
-
-En macOS/Linux, corregir permisos de la llave si es necesario:
-
-```bash
-chmod 400 tu-llave.pem
-```
-
-Dentro de EC2:
-
-```bash
-sudo dnf install -y docker git
-sudo systemctl enable --now docker
-sudo docker version
-```
-
-Después de subir el backend al repositorio:
-
-```bash
-git clone https://github.com/jdavila-sandoval/proyecto-integrador-o2026.git
-cd proyecto-integrador-o2026/src/backend
-sudo docker build -t edustream-backend:dev .
-```
-
-Si el repositorio es privado, utilizar acceso autorizado o transferencia segura. No poner tokens en la URL del comando.
-
-```bash
-sudo docker run -d \
-  --name edustream-backend \
-  --restart unless-stopped \
-  -p 8000:8000 \
-  -e AWS_DEFAULT_REGION=us-east-1 \
-  -e DYNAMODB_TABLE=EduStream_Videos \
-  -e SUBJECTS_TABLE=EduStream_Subjects \
-  -e VIDEOS_BUCKET=edustream-videos-storage \
-  -e MAX_UPLOAD_BYTES=524288000 \
-  -e COGNITO_REGION=us-east-1 \
-  -e COGNITO_USER_POOL_ID=us-east-1_7hzqDk0GB \
-  -e COGNITO_CLIENT_ID=6q15b1ifsh55d537bfrcgbvlfe \
-  edustream-backend:dev
-```
-
-No montar .aws ni inyectar credenciales locales en este contenedor. Debe obtenerlas del rol de EC2.
-
-## 6. Verificación
-
-En EC2:
-
-```bash
-sudo docker ps
-sudo docker logs --tail 100 edustream-backend
-curl http://localhost:8000/health
-curl http://localhost:8000/videos
-```
-
-Desde el equipo autorizado, abrir http://IP_PUBLICA_EC2:8000/docs y repetir GET y POST. El acceso HTTP directo es temporal: no enviar contraseñas ni datos sensibles.
-
-## 7. Recuperación y actualización
-
-Antes de la demo, confirmar laboratorio activo, instancia encendida, perfil IAM, contenedor, conectividad y acceso a la tabla.
-
-Para reconstruir una versión actualizada, desde src/backend:
-
-```bash
-git pull
-sudo docker build -t edustream-backend:dev .
-sudo docker stop edustream-backend
-sudo docker rm edustream-backend
-```
-
-Ejecutar nuevamente el comando docker run documentado arriba. Este procedimiento produce una interrupción temporal y no es despliegue sin caída.
-
-Detener o retirar recursos según las reglas del laboratorio al terminar. No eliminar tabla ni datos de prueba sin revisar si todavía se requieren para la evaluación.
-
-## 8. Diagnóstico
-
-| Síntoma | Revisar |
-|---|---|
-| /health funciona pero /videos falla | Tabla, región, credenciales y permisos |
-| NoCredentialsError en EC2 | Perfil IAM y acceso a IMDS desde Docker |
-| ExpiredToken local | Renovar las credenciales del laboratorio |
-| AccessDeniedException | Permisos de la identidad o rol |
-| ResourceNotFoundException | Tabla, región y cuenta |
-| Funciona en localhost de EC2, no desde fuera | Red, IP pública y security group |
-| Contenedor detenido | docker logs |
-| Puerto ocupado | Otro proceso o contenedor usando 8000 |
-| Nombre de contenedor en uso | Revisar docker ps -a antes de recrear |
-
-## 9. Evidencias
-
-Guardar capturas de contenedor activo, logs, prueba de creación, registro en DynamoDB y consulta posterior al reinicio. Registrar fecha, entorno y resultado. Ocultar credenciales, tokens y datos sensibles.
+### Flujo de ejecución del script:
+1. **Paso 1:** Verifica vigencia de credenciales temporales de AWS CLI con `aws sts get-caller-identity`.
+2. **Paso 2:** Consulta el estado de la instancia EC2 `i-0da66503c5157fdcd`. Si está detenida (`stopped`), envía el comando `start-instances` y espera a que esté activa.
+3. **Paso 3:** Obtiene la nueva IP pública asignada a la instancia.
+4. **Paso 4:** Actualiza la regla de entrada del Security Group `sg-0108695f0d2701501` para autorizar el tráfico en el puerto `8000`.
+5. **Paso 5:** Modifica la integración de API Gateway (`j72eps3z3f` / integración `8m5f8ar`) actualizando `IntegrationUri` a `http://<NUEVA_IP>:8000`.
+6. **Paso 6:** Realiza una petición de validación `GET /health` a través de la URL HTTPS de API Gateway para confirmar la recuperación completa.
