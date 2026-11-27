@@ -1,8 +1,9 @@
 node_modules
 dist
 .DS_Store
-edustream.pem
+*.pem
 __pycache__/
 *.py[cod]
 .env.local
 .env
+mock-uploads/
